@@ -37,5 +37,25 @@ services:
       timeout: 5s
       retries: 5
 
+  pipeline:
+    build:
+      context: ./pipeline
+    container_name: afc_pipeline
+    restart: "no"
+    env_file:
+      - .env
+    environment:
+      DB_HOST: db
+      DB_PORT: 5432
+      CSV_INPUT_DIR: /app/incoming_csv
+      HF_HOME: /cache/huggingface
+    volumes:
+      - ../../api_pusher:/app/incoming_csv:ro
+      - hf_cache:/cache/huggingface
+    depends_on:
+      db:
+        condition: service_healthy
+
 volumes:
   pgdata:
+  hf_cache:
