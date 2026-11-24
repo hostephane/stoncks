@@ -1,0 +1,1852 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AFC N.D.A.I — Global Sales & KYC Customer Sentiment</title>
+  
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- Polices Inter & JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+  
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <!-- D3.js & TopoJSON pour la carte mondiale interactive -->
+  <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+  <script src="https://cdn.jsdelivr.net/npm/topojson-client@3"></script>
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace'],
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    /* Barres de défilement fines aux teintes AFC */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: rgba(220, 38, 38, 0.28); border-radius: 9999px; }
+    ::-webkit-scrollbar-thumb:hover { background: rgba(185, 28, 28, 0.5); }
+
+    /* Styles de la carte mondiale D3 / SVG */
+    .country-shape {
+      transition: fill 0.25s ease, stroke-width 0.2s ease, filter 0.2s ease;
+      cursor: pointer;
+    }
+    .country-shape:hover {
+      filter: brightness(1.08);
+      stroke: #18181b;
+      stroke-width: 1.5px;
+    }
+    .country-inactive {
+      fill: #e4e4e7;
+      stroke: #d4d4d8;
+      stroke-width: 0.5px;
+      cursor: default;
+    }
+    .hub-pulse {
+      animation: pulse-ring 2.2s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
+      transform-origin: center;
+      transform-box: fill-box;
+    }
+    @keyframes pulse-ring {
+      0% { transform: scale(0.8); opacity: 0.9; }
+      75% { transform: scale(2.2); opacity: 0; }
+      100% { transform: scale(2.2); opacity: 0; }
+    }
+
+    /* Animation douce des cartes de commentaires KYC en arrière-plan */
+    @keyframes floatSlow {
+      0%, 100% { transform: translateY(0px); }
+      50% { transform: translateY(-6px); }
+    }
+    .bg-comment-card {
+      animation: floatSlow 7s ease-in-out infinite;
+      transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .bg-comment-card:nth-child(even) {
+      animation-delay: -3.5s;
+    }
+
+    .fade-in {
+      animation: fadeIn 0.3s ease-out forwards;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(6px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+  </style>
+</head>
+<body class="bg-stone-50 text-zinc-900 font-sans antialiased selection:bg-red-600 selection:text-white overflow-hidden">
+
+  <div class="flex h-screen w-full overflow-hidden">
+
+    <!-- =====================================================================
+         1. BARRE LATÉRALE GAUCHE SOMBRE & RÉTRACTABLE (#14090A / ROUGE AFC)
+         ===================================================================== -->
+    <aside id="sidebar" class="relative z-40 flex flex-col justify-between bg-[#160a0b] text-stone-200 border-r border-red-950/80 transition-all duration-300 ease-in-out w-64 shrink-0 select-none">
+      
+      <!-- Haut : Blason AFC + Toggle -->
+      <div>
+        <div class="h-16 flex items-center justify-between px-4 border-b border-red-950/70">
+          <div class="flex items-center gap-3 overflow-hidden">
+            <!-- Blason SVG Armoric Fried Chicken -->
+            <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-red-600 to-red-800 border border-amber-400/50 flex items-center justify-center shadow-lg shadow-red-600/30 shrink-0">
+              <svg viewBox="0 0 36 36" class="w-7 h-7" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <!-- Bouclier Rouge AFC -->
+                <path d="M6 5H30V17C30 24.5 18 31 18 31C18 31 6 24.5 6 17V5Z" fill="#DC2626" stroke="#FBBF24" stroke-width="1.8"/>
+                <!-- Crête -->
+                <path d="M14 9C14 7.5 15.5 7 16.5 8C17.2 6.8 19 7 19.5 8.2C20.5 7.5 22 8.2 21.5 9.5" fill="#FBBF24"/>
+                <!-- Tête de poulet stylisée -->
+                <circle cx="18" cy="15.5" r="5.5" fill="#FFFFFF"/>
+                <!-- Lunettes de soleil cool (Clin d'œil logo AFC) -->
+                <rect x="13.5" y="13.2" width="4" height="2.4" rx="0.6" fill="#18181B"/>
+                <rect x="18.5" y="13.2" width="4" height="2.4" rx="0.6" fill="#18181B"/>
+                <line x1="17.5" y1="14.2" x2="18.5" y2="14.2" stroke="#18181B" stroke-width="1.2"/>
+                <!-- Bec doré -->
+                <path d="M16.5 16.5L19.5 16.5L18 19L16.5 16.5Z" fill="#F59E0B"/>
+              </svg>
+            </div>
+            <div class="sidebar-label transition-opacity duration-200 whitespace-nowrap">
+              <div class="flex items-center gap-1.5">
+                <span class="font-black text-base tracking-tight text-white leading-none">AFC</span>
+                <span class="text-[9px] font-bold px-1.5 py-0.5 rounded bg-red-600 text-white tracking-wider">N.D.A.I</span>
+              </div>
+              <span class="text-[11px] text-amber-400/90 font-medium block mt-0.5">Armoric Fried Chicken</span>
+            </div>
+          </div>
+          
+          <button id="toggleSidebarBtn" title="Réduire / Étendre le menu" class="p-1.5 rounded-lg text-stone-400 hover:text-white hover:bg-red-950/70 transition-colors">
+            <i id="sidebarToggleIcon" data-lucide="panel-left-close" class="w-5 h-5"></i>
+          </button>
+        </div>
+
+        <!-- Menu Principal (4 Onglets Métier AFC) -->
+        <nav class="p-3 space-y-1.5 mt-2">
+          <div class="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-red-400/70 sidebar-label">
+            Pilotage Global & KYC
+          </div>
+
+          <button data-view="map" title="Carte Globale Drill-Down" class="nav-btn active w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all bg-red-600 text-white shadow-md shadow-red-600/30">
+            <i data-lucide="globe" class="w-5 h-5 shrink-0"></i>
+            <span class="sidebar-label truncate">Carte Mondiale</span>
+            <span class="sidebar-label ml-auto text-[10px] px-1.5 py-0.5 rounded bg-amber-400 text-zinc-950 font-bold">Drill</span>
+          </button>
+
+          <button data-view="overview" title="Ventes & Performance Produits" class="nav-btn w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-stone-400 hover:text-white hover:bg-red-950/60 transition-all">
+            <i data-lucide="trending-up" class="w-5 h-5 shrink-0"></i>
+            <span class="sidebar-label truncate">Ventes & Produits</span>
+          </button>
+
+          <button data-view="verbatims" title="Retours Campagne KYC (IA/ML)" class="nav-btn w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-stone-400 hover:text-white hover:bg-red-950/60 transition-all">
+            <i data-lucide="message-square-heart" class="w-5 h-5 shrink-0"></i>
+            <span class="sidebar-label truncate">Retours Campagne KYC</span>
+            <span id="sidebarFeedbackCount" class="sidebar-label ml-auto text-[10px] px-1.5 py-0.5 rounded bg-red-950 text-amber-300 font-mono font-bold">30</span>
+          </button>
+
+          <div class="pt-4 pb-1 px-3 text-[10px] font-semibold uppercase tracking-wider text-red-400/70 sidebar-label">
+            Pipeline Data & IA
+          </div>
+
+          <button data-view="database" title="Architecture CSV + API KYC" class="nav-btn w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-stone-400 hover:text-white hover:bg-red-950/60 transition-all">
+            <i data-lucide="database" class="w-5 h-5 shrink-0"></i>
+            <span class="sidebar-label truncate">Pipeline Data & BDD</span>
+          </button>
+        </nav>
+      </div>
+
+      <!-- Bas de Sidebar : Statut Fusion USC India & Flux KYC -->
+      <div class="p-3 border-t border-red-950/70 space-y-2.5">
+        <div class="p-2.5 rounded-xl bg-red-950/50 border border-red-800/40 flex items-center gap-2.5 overflow-hidden">
+          <span class="w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse shrink-0"></span>
+          <div class="sidebar-label text-xs leading-tight truncate">
+            <div class="font-bold text-white">KYC API + CSV Ventes</div>
+            <div class="text-[11px] text-amber-300/80">Focus Intégration USC Inde</div>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- =====================================================================
+         2. CONTENU PRINCIPAL (HEADER + VUES)
+         ===================================================================== -->
+    <div class="flex-1 flex flex-col min-w-0 overflow-hidden bg-stone-50">
+      
+      <!-- En-tête Global avec accent rouge AFC -->
+      <header class="h-16 bg-white border-b border-stone-200 px-6 flex items-center justify-between shrink-0 z-30">
+        <div class="flex items-center gap-3 min-w-0">
+          <div class="w-1.5 h-8 rounded-full bg-gradient-to-b from-red-600 to-amber-500 hidden sm:block"></div>
+          <div class="min-w-0">
+            <div class="flex items-center gap-2">
+              <h1 id="pageTitle" class="text-base sm:text-lg font-extrabold text-zinc-900 tracking-tight truncate">Nugget Data & AI Initiative (N.D.A.I) — Carte Globale</h1>
+              <span class="hidden xl:inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-50 text-red-700 border border-red-200">
+                Campagne KYC Active
+              </span>
+            </div>
+            <p id="pageSubtitle" class="text-xs text-zinc-500 hidden sm:block truncate">Pilotage mondial des ventes Salesforce & analyse des sentiments clients KYC (incluant USC Corporation Inde)</p>
+          </div>
+        </div>
+
+        <!-- Contrôles Globaux : Filtre Produit AFC + Période + Export -->
+        <div class="flex items-center gap-2.5 shrink-0">
+          <!-- Filtre Gamme Produits AFC -->
+          <select id="globalProductFilter" class="bg-red-50/70 border border-red-200 text-xs font-bold text-red-900 rounded-xl px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-red-600">
+            <option value="ALL">Tous Produits AFC</option>
+            <option value="Tenders">Crispy Tenders</option>
+            <option value="Buckets">Family Buckets</option>
+            <option value="Spicy Wings">Spicy Wings</option>
+            <option value="Nuggets">Nuggets Data Box</option>
+            <option value="Burgers">Armoric Burgers</option>
+          </select>
+
+          <!-- Sélecteur de période -->
+          <div class="hidden md:flex items-center bg-stone-100 p-1 rounded-xl border border-stone-200">
+            <button data-period="all" class="period-btn active px-2.5 py-1 rounded-lg text-xs font-bold bg-white shadow-sm text-red-600 transition-all">2026</button>
+            <button data-period="30d" class="period-btn px-2.5 py-1 rounded-lg text-xs font-medium text-zinc-600 hover:text-zinc-900 transition-all">30j</button>
+            <button data-period="7d" class="period-btn px-2.5 py-1 rounded-lg text-xs font-medium text-zinc-600 hover:text-zinc-900 transition-all">7j</button>
+          </div>
+
+          <button id="exportJsonBtn" class="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-red-600 hover:bg-red-700 text-white shadow-sm shadow-red-600/20 transition-all active:scale-95">
+            <i data-lucide="download" class="w-3.5 h-3.5"></i>
+            <span class="hidden sm:inline">Export CSV/JSON</span>
+          </button>
+        </div>
+      </header>
+
+      <!-- Zone Scrollable des 4 Vues -->
+      <main class="flex-1 overflow-y-auto p-4 md:p-6 space-y-5">
+
+        <!-- =================================================================
+             VUE 1 : CARTE DU MONDE DRILL-DOWN + FOND DE COMMENTAIRES KYC
+             ================================================================= -->
+        <section id="view-map" class="view-section fade-in space-y-4">
+          
+          <!-- Barre de contrôle : Fil d'Ariane + Mode d'affichage des commentaires + Métrique -->
+          <div class="bg-white border border-stone-200 rounded-2xl p-3.5 flex flex-wrap items-center justify-between gap-3 shadow-sm">
+            
+            <!-- Fil d'Ariane & Bouton Retour -->
+            <div class="flex items-center gap-2 flex-wrap">
+              <button id="mapBackBtn" disabled class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-red-50 text-red-700 hover:bg-red-100 disabled:opacity-40 disabled:pointer-events-none transition-all">
+                <i data-lucide="arrow-left" class="w-3.5 h-3.5"></i>
+                <span>Retour</span>
+              </button>
+
+              <div class="h-4 w-px bg-stone-200 mx-0.5"></div>
+
+              <!-- Breadcrumb dynamique : Monde > Région > Pays > Restaurant/Hub -->
+              <nav id="mapBreadcrumb" class="flex items-center gap-1.5 text-xs font-medium flex-wrap">
+                <!-- Généré via JS -->
+              </nav>
+            </div>
+
+            <!-- Options Carte & Commentaires KYC -->
+            <div class="flex items-center gap-2.5 flex-wrap">
+              <!-- Bascule Mode Commentaires -->
+              <div class="flex items-center bg-stone-100 p-1 rounded-xl border border-stone-200 text-xs">
+                <button id="modeImmersiveBtn" class="px-2.5 py-1 rounded-lg font-bold bg-white text-red-600 shadow-sm flex items-center gap-1.5 transition-all" title="Affiche les derniers commentaires KYC en fond de carte et dans le volet droit">
+                  <i data-lucide="layers" class="w-3.5 h-3.5"></i>
+                  <span class="hidden xl:inline">Fond KYC + Carte</span>
+                </button>
+                <button id="modeFocusBtn" class="px-2.5 py-1 rounded-lg font-medium text-zinc-600 hover:text-zinc-900 flex items-center gap-1.5 transition-all" title="Met en avant la grille complète des derniers verbatims KYC de la zone">
+                  <i data-lucide="message-square" class="w-3.5 h-3.5"></i>
+                  <span class="hidden xl:inline">Focus Verbatims KYC</span>
+                </button>
+              </div>
+
+              <!-- Métrique Choroplèthe -->
+              <select id="mapMetricSelect" class="bg-white border border-stone-200 text-xs font-bold text-zinc-700 rounded-xl px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-red-600">
+                <option value="csat">Satisfaction KYC (%)</option>
+                <option value="revenue">Chiffre d'Affaires (k€)</option>
+                <option value="growth">Croissance Ventes (%)</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Grille Principale : Carte Mondiale avec Fond de Commentaires KYC (7 cols) + Volet Contextuel (5 cols) -->
+          <div class="grid grid-cols-1 lg:grid-cols-12 gap-5">
+            
+            <!-- COLONNE GAUCHE : CARTE DU MONDE + ARRIÈRE-PLAN DE COMMENTAIRES KYC -->
+            <div id="mapCardWrapper" class="lg:col-span-7 bg-white border border-stone-200 rounded-2xl p-4 sm:p-5 flex flex-col justify-between relative overflow-hidden shadow-sm min-h-[570px]">
+              
+              <!-- ARRIÈRE-PLAN IMMERSIF : LES DERNIERS COMMENTAIRES KYC DE LA ZONE ACTIVE -->
+              <div id="ambientCommentsBackdrop" class="absolute inset-0 z-0 pointer-events-none overflow-hidden p-4 grid grid-cols-2 sm:grid-cols-3 gap-3 content-between opacity-40 transition-opacity duration-500">
+                <!-- Cartes de commentaires générées dynamiquement en arrière-plan -->
+              </div>
+
+              <!-- Voile dégradé léger teinté chaud pour garantir la lisibilité parfaite de la carte -->
+              <div id="ambientGradientOverlay" class="absolute inset-0 z-0 pointer-events-none bg-gradient-to-b from-white/80 via-stone-50/45 to-white/85"></div>
+
+              <!-- En-tête de la Carte (Z-Index 10) -->
+              <div class="relative z-10 flex flex-wrap items-start justify-between gap-3">
+                <div class="bg-white/95 backdrop-blur-md border border-red-200/80 rounded-xl px-3.5 py-2 shadow-sm">
+                  <div class="flex items-center gap-2">
+                    <span id="mapLevelBadge" class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide bg-red-600 text-white">
+                      Niveau 1 • Réseau Mondial AFC
+                    </span>
+                    <span id="mapNewMarketBadge" class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300">
+                      + Intégration USC Inde
+                    </span>
+                  </div>
+                  <h2 id="mapZoneTitle" class="text-base sm:text-lg font-extrabold text-zinc-900 mt-0.5">Performance Mondiale AFC & Sentiment KYC</h2>
+                </div>
+
+                <!-- Légende Sémantique AFC (Or / Émeraude / Rouge) -->
+                <div class="bg-white/95 backdrop-blur-md border border-stone-200/90 rounded-xl p-2.5 text-[11px] shadow-sm">
+                  <div id="legendTitle" class="font-bold text-zinc-700 mb-1">Score Satisfaction KYC</div>
+                  <div class="flex items-center gap-2.5">
+                    <span class="flex items-center gap-1 text-zinc-600"><span class="w-2.5 h-2.5 rounded-sm bg-emerald-500 inline-block"></span>&gt; 85%</span>
+                    <span class="flex items-center gap-1 text-zinc-600"><span class="w-2.5 h-2.5 rounded-sm bg-amber-400 inline-block"></span>70-85%</span>
+                    <span class="flex items-center gap-1 text-zinc-600"><span class="w-2.5 h-2.5 rounded-sm bg-red-600 inline-block"></span>&lt; 70%</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Conteneur D3 / SVG de la Carte du Monde (Z-Index 10) -->
+              <div id="worldMapContainer" class="relative z-10 flex-1 flex items-center justify-center my-2 select-none min-h-[360px]">
+                <div class="flex flex-col items-center gap-2 text-zinc-400 text-xs">
+                  <div class="w-6 h-6 border-2 border-red-600 border-t-transparent rounded-full animate-spin"></div>
+                  <span>Chargement de la carte mondiale AFC...</span>
+                </div>
+              </div>
+
+              <!-- Mode Focus Verbatims KYC (s'affiche par-dessus la carte si activé) -->
+              <div id="focusVerbatimsOverlay" class="hidden relative z-20 flex-1 overflow-y-auto my-2 pr-1">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3" id="focusVerbatimsGrid">
+                  <!-- Injecté dynamiquement -->
+                </div>
+              </div>
+
+              <!-- Barre inférieure de la carte : Accès rapide aux régions AFC dont l'Inde (USC) -->
+              <div class="relative z-10 bg-white/95 backdrop-blur-md border border-stone-200/90 rounded-xl px-3 py-2 flex flex-wrap items-center justify-between gap-2 text-[11px]">
+                <div class="flex items-center gap-1.5 flex-wrap">
+                  <span class="text-zinc-400 font-semibold mr-1">Zones AFC :</span>
+                  <button onclick="drillToRegion('EU')" class="px-2 py-0.5 rounded-md bg-stone-100 hover:bg-red-600 hover:text-white font-bold text-zinc-700 transition-colors">Europe</button>
+                  <button onclick="drillToRegion('NA')" class="px-2 py-0.5 rounded-md bg-stone-100 hover:bg-red-600 hover:text-white font-bold text-zinc-700 transition-colors">Am. Nord</button>
+                  <button onclick="drillToRegion('APAC')" class="px-2 py-0.5 rounded-md bg-amber-100 hover:bg-red-600 hover:text-white font-bold text-amber-900 border border-amber-300 transition-colors">Asie & Inde (USC)</button>
+                  <button onclick="drillToRegion('LATAM')" class="px-2 py-0.5 rounded-md bg-stone-100 hover:bg-red-600 hover:text-white font-bold text-zinc-700 transition-colors">Am. Latine</button>
+                  <button onclick="drillToRegion('MEA')" class="px-2 py-0.5 rounded-md bg-stone-100 hover:bg-red-600 hover:text-white font-bold text-zinc-700 transition-colors">Moyen-Orient</button>
+                </div>
+                <span id="mapSubCount" class="text-zinc-500 font-semibold">5 régions • 15 pays • 26 restaurants/hubs</span>
+              </div>
+            </div>
+
+            <!-- COLONNE DROITE : KPIs VENTES + SATISFACTION KYC + FLUX DES 8 DERNIERS COMMENTAIRES -->
+            <div class="lg:col-span-5 flex flex-col gap-4">
+              
+              <!-- 3 Mini-KPIs Double Objectif N.D.A.I (CA Ventes + CSAT KYC + Volume Avis) -->
+              <div class="grid grid-cols-3 gap-3">
+                <div class="bg-white border border-stone-200 rounded-2xl p-3.5 shadow-sm border-t-4 border-t-red-600">
+                  <div class="text-[11px] font-semibold text-zinc-500">CA Ventes (CSV)</div>
+                  <div id="sideKpiRevenue" class="text-lg sm:text-xl font-black font-mono mt-1 text-zinc-900">18,4 M€</div>
+                  <div id="sideKpiGrowth" class="text-[11px] font-bold text-emerald-600 mt-0.5">+14,2% vs N-1</div>
+                </div>
+
+                <div class="bg-white border border-stone-200 rounded-2xl p-3.5 shadow-sm border-t-4 border-t-amber-400">
+                  <div class="text-[11px] font-semibold text-zinc-500">CSAT Campagne KYC</div>
+                  <div id="sideKpiCsat" class="text-lg sm:text-xl font-black font-mono mt-1 text-emerald-600">85,8%</div>
+                  <div id="sideKpiRating" class="text-[11px] font-bold text-amber-500 mt-0.5 flex items-center gap-0.5">
+                    <span>4.3/5</span> <span>★★★★★</span>
+                  </div>
+                </div>
+
+                <div class="bg-white border border-stone-200 rounded-2xl p-3.5 shadow-sm border-t-4 border-t-zinc-800">
+                  <div class="text-[11px] font-semibold text-zinc-500">Retours KYC</div>
+                  <div id="sideKpiVolume" class="text-lg sm:text-xl font-black font-mono mt-1 text-zinc-900">16 450</div>
+                  <div id="sideKpiZoneTag" class="text-[11px] font-medium text-zinc-400 truncate mt-0.5">Monde entier</div>
+                </div>
+              </div>
+
+              <!-- Sous-divisions cliquables (Régions -> Pays -> Restaurants/Hubs) -->
+              <div class="bg-white border border-stone-200 rounded-2xl p-4 shadow-sm">
+                <div class="flex items-center justify-between mb-2.5">
+                  <h3 id="sideSubListTitle" class="text-xs font-extrabold uppercase tracking-wider text-zinc-600">Explorer par Région AFC</h3>
+                  <span class="text-[11px] text-red-600 font-bold">Cliquer pour zoomer</span>
+                </div>
+                <div id="drilldownSubList" class="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-[155px] overflow-y-auto pr-1">
+                  <!-- Injecté par JS -->
+                </div>
+              </div>
+
+              <!-- Flux en direct : Les 8 derniers commentaires KYC de la zone active -->
+              <div class="bg-white border border-stone-200 rounded-2xl p-4 shadow-sm flex-1 flex flex-col min-h-[275px]">
+                <div class="flex items-center justify-between mb-3 pb-2 border-b border-stone-100">
+                  <div class="flex items-center gap-2">
+                    <span class="w-2.5 h-2.5 rounded-full bg-red-600 animate-ping"></span>
+                    <h3 id="liveCommentsHeader" class="text-xs font-extrabold uppercase tracking-wider text-zinc-800">Derniers Retours KYC — Monde (8)</h3>
+                  </div>
+                  <button onclick="switchView('verbatims')" class="text-[11px] font-bold text-red-600 hover:text-red-700 flex items-center gap-1">
+                    <span>Tous les avis</span>
+                    <i data-lucide="arrow-up-right" class="w-3 h-3"></i>
+                  </button>
+                </div>
+
+                <div id="sideLiveCommentsList" class="space-y-2.5 overflow-y-auto max-h-[260px] pr-1">
+                  <!-- Les 8 derniers verbatims KYC de la région/pays/restaurant s'affichent ici -->
+                </div>
+              </div>
+
+            </div>
+          </div>
+        </section>
+
+
+        <!-- =================================================================
+             VUE 2 : VENTES SALESFORCE & MIX PRODUITS AFC (DASHBOARD CLASSIQUE)
+             ================================================================= -->
+        <section id="view-overview" class="view-section hidden fade-in space-y-6">
+          
+          <!-- 4 Cartes KPIs Globales AFC -->
+          <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+            <div class="bg-white border border-stone-200 rounded-2xl p-5 shadow-sm border-l-4 border-l-red-600">
+              <div class="flex items-center justify-between">
+                <span class="text-xs font-bold text-zinc-500">Chiffre d'Affaires Global AFC</span>
+                <div class="w-8 h-8 rounded-lg bg-red-50 text-red-600 flex items-center justify-center">
+                  <i data-lucide="euro" class="w-4 h-4"></i>
+                </div>
+              </div>
+              <div class="text-2xl font-black font-mono text-zinc-900 mt-3">18 420 000 €</div>
+              <div class="flex items-center gap-1.5 mt-2 text-xs">
+                <span class="px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 font-bold">+14,2%</span>
+                <span class="text-zinc-400">porté par l'acquisition USC Inde</span>
+              </div>
+            </div>
+
+            <div class="bg-white border border-stone-200 rounded-2xl p-5 shadow-sm border-l-4 border-l-amber-400">
+              <div class="flex items-center justify-between">
+                <span class="text-xs font-bold text-zinc-500">Produit Star : Crispy Tenders</span>
+                <div class="w-8 h-8 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center">
+                  <i data-lucide="flame" class="w-4 h-4"></i>
+                </div>
+              </div>
+              <div class="text-2xl font-black font-mono text-zinc-900 mt-3">38,5 %</div>
+              <div class="flex items-center gap-1.5 mt-2 text-xs">
+                <span class="px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 font-bold">7,09 M€</span>
+                <span class="text-zinc-400">du mix ventes mondial</span>
+              </div>
+            </div>
+
+            <div class="bg-white border border-stone-200 rounded-2xl p-5 shadow-sm border-l-4 border-l-emerald-500">
+              <div class="flex items-center justify-between">
+                <span class="text-xs font-bold text-zinc-500">Sentiment Positif KYC (IA)</span>
+                <div class="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center">
+                  <i data-lucide="smile" class="w-4 h-4"></i>
+                </div>
+              </div>
+              <div class="text-2xl font-black font-mono text-zinc-900 mt-3">85,8 %</div>
+              <div class="flex items-center gap-1.5 mt-2 text-xs">
+                <span class="px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 font-bold">+4,1 pts</span>
+                <span class="text-zinc-400">depuis lancement campagne KYC</span>
+              </div>
+            </div>
+
+            <div class="bg-white border border-stone-200 rounded-2xl p-5 shadow-sm border-l-4 border-l-zinc-900">
+              <div class="flex items-center justify-between">
+                <span class="text-xs font-bold text-zinc-500">Croissance USC Inde (Post-Fusion)</span>
+                <div class="w-8 h-8 rounded-lg bg-zinc-100 text-zinc-800 flex items-center justify-center">
+                  <i data-lucide="rocket" class="w-4 h-4"></i>
+                </div>
+              </div>
+              <div class="text-2xl font-black font-mono text-red-600 mt-3">+34,6 %</div>
+              <div class="flex items-center gap-1.5 mt-2 text-xs">
+                <span class="px-1.5 py-0.5 rounded bg-red-50 text-red-700 font-bold">2 890 k€</span>
+                <span class="text-zinc-400">Bengaluru, Mumbai & New Delhi</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Graphiques Ventes par Produit & Impact Campagne KYC -->
+          <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            <div class="lg:col-span-8 bg-white border border-stone-200 rounded-2xl p-5 shadow-sm">
+              <div class="mb-4 flex items-center justify-between">
+                <div>
+                  <h3 class="text-base font-extrabold text-zinc-900">Impact de la Campagne KYC sur les Ventes Quotidiennes/Mensuelles</h3>
+                  <p class="text-xs text-zinc-500">Corrélation entre le volume de ventes AFC (k€) et l'indice de satisfaction client KYC (%)</p>
+                </div>
+                <span class="px-2.5 py-1 rounded-lg bg-red-50 text-red-700 text-xs font-bold">Données CSV + API KYC</span>
+              </div>
+              <div class="h-72 w-full">
+                <canvas id="overviewTrendChart"></canvas>
+              </div>
+            </div>
+
+            <div class="lg:col-span-4 bg-white border border-stone-200 rounded-2xl p-5 shadow-sm flex flex-col justify-between">
+              <div>
+                <h3 class="text-base font-extrabold text-zinc-900">Répartition par Produit AFC</h3>
+                <p class="text-xs text-zinc-500">Suivi force de vente par gamme produit</p>
+              </div>
+              <div class="h-52 w-full my-2 flex items-center justify-center">
+                <canvas id="overviewProductChart"></canvas>
+              </div>
+              <div class="grid grid-cols-3 gap-2 pt-3 border-t border-stone-100 text-center text-xs">
+                <div>
+                  <div class="font-black text-red-600">38.5%</div>
+                  <div class="text-zinc-500">Tenders</div>
+                </div>
+                <div>
+                  <div class="font-black text-amber-500">26.0%</div>
+                  <div class="text-zinc-500">Buckets</div>
+                </div>
+                <div>
+                  <div class="font-black text-zinc-800">35.5%</div>
+                  <div class="text-zinc-500">Wings/Nuggets</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Comparaison des Ventes par Grande Région -->
+          <div class="bg-white border border-stone-200 rounded-2xl p-5 shadow-sm">
+            <h3 class="text-base font-extrabold text-zinc-900 mb-4">Ventes Consolidées Salesforce par Région (en k€)</h3>
+            <div class="h-60 w-full">
+              <canvas id="overviewRegionBarChart"></canvas>
+            </div>
+          </div>
+        </section>
+
+
+        <!-- =================================================================
+             VUE 3 : EXPLORATEUR DE VERBATIMS CAMPAGNE KYC (ANALYSE IA/ML)
+             ================================================================= -->
+        <section id="view-verbatims" class="view-section hidden fade-in space-y-5">
+          <div class="bg-white border border-stone-200 rounded-2xl p-5 shadow-sm space-y-4">
+            
+            <!-- Barre de filtres avancés -->
+            <div class="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h3 class="text-base font-extrabold text-zinc-900">Flux des Retours Campagne KYC — Classification IA/ML</h3>
+                <p class="text-xs text-zinc-500">Analyse NLP des sentiments clients par pays, restaurant et gamme de produits AFC</p>
+              </div>
+
+              <div class="flex flex-wrap items-center gap-2.5">
+                <div class="relative">
+                  <i data-lucide="search" class="w-4 h-4 text-zinc-400 absolute left-3 top-1/2 -translate-y-1/2"></i>
+                  <input id="verbatimSearchInput" type="text" placeholder="Rechercher Tenders, Inde, épices..." class="pl-9 pr-3 py-2 rounded-xl text-xs bg-stone-50 border border-stone-200 focus:outline-none focus:ring-2 focus:ring-red-600 w-60" />
+                </div>
+
+                <select id="verbatimRegionFilter" class="bg-stone-50 border border-stone-200 text-xs font-semibold rounded-xl px-3 py-2">
+                  <option value="ALL">Toutes les régions AFC</option>
+                  <option value="EU">Europe (Siège Armorique & Hubs)</option>
+                  <option value="APAC">Asie-Pacifique & Inde (USC)</option>
+                  <option value="NA">Amérique du Nord</option>
+                  <option value="LATAM">Amérique Latine</option>
+                  <option value="MEA">Moyen-Orient & Afrique</option>
+                </select>
+
+                <select id="verbatimSentimentFilter" class="bg-stone-50 border border-stone-200 text-xs font-semibold rounded-xl px-3 py-2">
+                  <option value="ALL">Tous sentiments IA</option>
+                  <option value="positif">Positif (4-5 ★)</option>
+                  <option value="neutre">Neutre (3 ★)</option>
+                  <option value="critique">Alerte Qualité (1-2 ★)</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- Tableau des Verbatims KYC -->
+            <div class="overflow-x-auto">
+              <table class="w-full text-left border-collapse">
+                <thead>
+                  <tr class="border-b border-stone-200 text-[11px] font-bold uppercase tracking-wider text-zinc-400">
+                    <th class="py-3 px-3">Client & Horodatage</th>
+                    <th class="py-3 px-3">Restaurant / Pays</th>
+                    <th class="py-3 px-3">Score & Sentiment IA</th>
+                    <th class="py-3 px-3">Produit / Thème</th>
+                    <th class="py-3 px-3 w-2/5">Verbatim Campagne KYC</th>
+                    <th class="py-3 px-3 text-right">Action Carte</th>
+                  </tr>
+                </thead>
+                <tbody id="verbatimsTableBody" class="divide-y divide-stone-100 text-xs">
+                  <!-- Injecté via JS -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+
+        <!-- =================================================================
+             VUE 4 : PIPELINE DATA N.D.A.I & ARCHITECTURE BDD (CSV + REST API KYC)
+             ================================================================= -->
+        <section id="view-database" class="view-section hidden fade-in space-y-6">
+          
+          <!-- Schéma d'Architecture Pipeline N.D.A.I (Cahier des charges AFC) -->
+          <div class="bg-white border border-stone-200 rounded-2xl p-5 shadow-sm">
+            <h3 class="text-base font-extrabold text-zinc-900 mb-3">Architecture Industrielle N.D.A.I (Open-Source & Cloud-Ready)</h3>
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-3 text-xs">
+              <div class="p-3.5 rounded-xl bg-red-50 border border-red-200">
+                <div class="font-extrabold text-red-700 flex items-center gap-1.5">
+                  <i data-lucide="file-spreadsheet" class="w-4 h-4"></i> 1. Sources Hétérogènes
+                </div>
+                <p class="text-zinc-600 mt-1">• Fichiers <strong>CSV quotidiens</strong> des ventes (pays & produits)<br>• <strong>REST API KYC</strong> en temps réel (retours campagne)</p>
+              </div>
+              <div class="p-3.5 rounded-xl bg-amber-50 border border-amber-200">
+                <div class="font-extrabold text-amber-800 flex items-center gap-1.5">
+                  <i data-lucide="workflow" class="w-4 h-4"></i> 2. Ingestion & ETL
+                </div>
+                <p class="text-zinc-600 mt-1">Pipeline scalable (Python / Airflow / Kafka) normalisant les formats AFC historiques et <strong>USC Corporation Inde</strong>.</p>
+              </div>
+              <div class="p-3.5 rounded-xl bg-zinc-100 border border-zinc-300">
+                <div class="font-extrabold text-zinc-800 flex items-center gap-1.5">
+                  <i data-lucide="brain-circuit" class="w-4 h-4"></i> 3. Modèle IA / NLP
+                </div>
+                <p class="text-zinc-600 mt-1">Analyse de sentiment multilingue & extraction de sujets (croustillant, épices, livraison, accueil).</p>
+              </div>
+              <div class="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200">
+                <div class="font-extrabold text-emerald-800 flex items-center gap-1.5">
+                  <i data-lucide="layout-dashboard" class="w-4 h-4"></i> 4. Restitution BI
+                </div>
+                <p class="text-zinc-600 mt-1">Dashboard décisionnel pour la force de vente mondiale et le comité de direction AFC.</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <!-- Schéma SQL Relationnel -->
+            <div class="bg-white border border-stone-200 rounded-2xl p-6 shadow-sm space-y-4">
+              <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl bg-red-50 text-red-600 flex items-center justify-center">
+                  <i data-lucide="database" class="w-5 h-5"></i>
+                </div>
+                <div>
+                  <h3 class="text-base font-extrabold text-zinc-900">Schéma PostgreSQL / PostGIS Unifié AFC + USC</h3>
+                  <p class="text-xs text-zinc-500">Modèle prêt à recevoir les flux CSV de ventes et les webhooks API KYC</p>
+                </div>
+              </div>
+
+              <pre class="p-4 rounded-xl bg-[#160a0b] text-stone-200 font-mono text-[11px] overflow-x-auto leading-relaxed">
+-- 1. Référentiel Géographique (Monde > Région > Pays > Restaurant)
+CREATE TABLE afc_restaurants (
+  id VARCHAR(10) PRIMARY KEY, -- ex: 'PAR', 'BLR', 'NYC'
+  country_iso VARCHAR(3) NOT NULL, -- '250' (FR), '356' (IN)...
+  region_id VARCHAR(10) NOT NULL,  -- 'EU', 'APAC', 'NA', 'LATAM', 'MEA'
+  entity_source VARCHAR(20) DEFAULT 'AFC', -- 'AFC' ou 'USC_MERGER'
+  name VARCHAR(120) NOT NULL
+);
+
+-- 2. Ventes Quotidiennes (Ingérées depuis CSV Salesforce)
+CREATE TABLE daily_sales (
+  id BIGSERIAL PRIMARY KEY,
+  sale_date DATE NOT NULL,
+  restaurant_id VARCHAR(10) REFERENCES afc_restaurants(id),
+  product_category VARCHAR(40) NOT NULL, -- 'Tenders', 'Buckets', 'Spicy Wings'...
+  units_sold INT NOT NULL,
+  revenue_eur NUMERIC(12,2) NOT NULL
+);
+
+-- 3. Retours Campagne KYC (Ingérés via REST API + Enrichis IA/ML)
+CREATE TABLE kyc_campaign_feedback (
+  id BIGSERIAL PRIMARY KEY,
+  restaurant_id VARCHAR(10) REFERENCES afc_restaurants(id),
+  product_mentioned VARCHAR(40),
+  customer_name VARCHAR(120),
+  rating SMALLINT CHECK (rating BETWEEN 1 AND 5),
+  ai_sentiment VARCHAR(20), -- 'positif', 'neutre', 'critique'
+  ai_confidence NUMERIC(4,3),
+  comment_text TEXT NOT NULL,
+  received_at TIMESTAMPTZ DEFAULT NOW()
+);</pre>
+            </div>
+
+            <!-- Exemple de Payload JSON REST API KYC -->
+            <div class="bg-white border border-stone-200 rounded-2xl p-6 shadow-sm flex flex-col justify-between space-y-4">
+              <div>
+                <h3 class="text-base font-extrabold text-zinc-900">Endpoint REST API KYC (<code class="text-red-600 font-mono text-xs">POST /api/v1/kyc/ingest</code>)</h3>
+                <p class="text-xs text-zinc-500 mt-1">Exemple d'événement JSON envoyé par l'outil de campagne marketing KYC :</p>
+
+                <pre class="mt-3 p-4 rounded-xl bg-[#160a0b] text-amber-300 font-mono text-[11px] overflow-x-auto leading-relaxed">
+{
+  "campaign_id": "KYC-AFC-GLOBAL-2026",
+  "restaurant_id": "BLR",
+  "country_iso": "356",
+  "entity": "USC_CORPORATION_INDIA",
+  "customer": {
+    "name": "Ananya Sharma",
+    "channel": "QR_CODE_TICKET"
+  },
+  "feedback": {
+    "rating": 5,
+    "product": "Spicy Wings",
+    "comment": "Les Spicy Wings AFC avec la nouvelle marinade masala sont incroyables !"
+  },
+  "ml_enrichment": {
+    "sentiment": "positif",
+    "score": 0.964,
+    "topics": ["Goût", "Innovation Produit"]
+  }
+}</pre>
+              </div>
+
+              <div class="pt-3 border-t border-stone-100 flex items-center justify-between">
+                <button id="simulateApiBtn" class="px-4 py-2 rounded-xl text-xs font-bold bg-red-600 hover:bg-red-700 text-white shadow-sm transition-all">
+                  Simuler un appel Webhook KYC
+                </button>
+                <span id="apiStatusLabel" class="text-xs text-zinc-500 font-semibold">Données mock actives (CSV + KYC API)</span>
+              </div>
+            </div>
+          </div>
+        </section>
+
+      </main>
+    </div>
+  </div>
+
+  <!-- Infobulle flottante dynamique sur la carte du monde -->
+  <div id="worldMapTooltip" class="pointer-events-none fixed z-50 hidden bg-[#160a0b]/95 text-white backdrop-blur-md border border-red-800/80 rounded-xl p-3 shadow-2xl text-xs min-w-[225px]">
+    <div class="flex items-center justify-between gap-2 border-b border-red-900/70 pb-1.5 mb-1.5">
+      <span id="ttTitle" class="font-extrabold text-sm text-white">Pays</span>
+      <span id="ttRegionBadge" class="font-mono text-[10px] px-1.5 py-0.5 rounded bg-red-600 text-white font-bold">EU</span>
+    </div>
+    <div class="space-y-1">
+      <div class="flex justify-between">
+        <span class="text-stone-400">CA Ventes (CSV) :</span>
+        <span id="ttRevenue" class="font-mono font-bold text-amber-400">2 890 k€</span>
+      </div>
+      <div class="flex justify-between">
+        <span class="text-stone-400">Satisfaction KYC :</span>
+        <span id="ttCsat" class="font-mono font-bold text-emerald-400">88.4%</span>
+      </div>
+      <div class="flex justify-between">
+        <span class="text-stone-400">Croissance Ventes :</span>
+        <span id="ttGrowth" class="font-mono font-semibold text-stone-200">+12.4%</span>
+      </div>
+    </div>
+    <div id="ttHint" class="mt-2 pt-1.5 border-t border-red-900/70 text-[10px] text-amber-300 flex items-center gap-1 font-semibold">
+      <i data-lucide="mouse-pointer-click" class="w-3 h-3"></i>
+      <span>Cliquer pour explorer ce marché AFC</span>
+    </div>
+  </div>
+
+  <!-- Toast Notification -->
+  <div id="toastNotification" class="fixed bottom-5 right-5 z-50 transform translate-y-20 opacity-0 transition-all duration-300 bg-[#160a0b] text-white border border-red-700 px-4 py-3 rounded-xl shadow-2xl flex items-center gap-2.5 text-xs font-bold">
+    <i data-lucide="flame" class="w-4 h-4 text-amber-400"></i>
+    <span id="toastMessage">Action effectuée</span>
+  </div>
+
+  <!-- =======================================================================
+       DONNÉES FICTIVES AFC (N.D.A.I) & LOGIQUE APPLICATIVE
+       ======================================================================= -->
+  <script>
+    /**
+     * 1. BASE DE DONNÉES FICTIVE MONDIALE AFC (Armoric Fried Chicken)
+     * Intègre le réseau historique AFC (France/Europe, Amérique du Nord...)
+     * et l'acquisition stratégique d'USC Corporation en Inde.
+     */
+    const mockDatabase = {
+      regions: [
+        { id: 'EU', name: 'Europe (Berceau AFC)', center: [8, 48], zoomScale: 3.6 },
+        { id: 'APAC', name: 'Asie-Pacifique & Inde (USC)', center: [108, 14], zoomScale: 2.3 },
+        { id: 'NA', name: 'Amérique du Nord', center: [-98, 39], zoomScale: 2.3 },
+        { id: 'LATAM', name: 'Amérique Latine', center: [-60, -15], zoomScale: 2.3 },
+        { id: 'MEA', name: 'Moyen-Orient & Afrique', center: [32, -2], zoomScale: 2.2 }
+      ],
+      countries: [
+        // EUROPE (EU - Siège historique Bretagne / France)
+        {
+          iso: '250', code: 'FR', name: 'France (Siège Armorique)', regionId: 'EU', coords: [2.2, 46.6],
+          csat: 90.4, revenueK: 3420, growth: 11.2, volume: 3120,
+          sites: [
+            { id: 'REN', name: 'Rennes Armorique HQ', coords: [-1.67, 48.11], csat: 92.8, revenueK: 1280, growth: 13.5, volume: 1180 },
+            { id: 'PAR', name: 'Paris Opéra Flagship', coords: [2.35, 48.85], csat: 89.5, revenueK: 1410, growth: 10.4, volume: 1290 },
+            { id: 'LYO', name: 'Lyon Part-Dieu', coords: [4.83, 45.76], csat: 88.2, revenueK: 730, growth: 8.9, volume: 650 }
+          ]
+        },
+        {
+          iso: '276', code: 'DE', name: 'Allemagne', regionId: 'EU', coords: [10.4, 51.1],
+          csat: 86.2, revenueK: 2150, growth: 9.8, volume: 1980,
+          sites: [
+            { id: 'BER', name: 'Berlin Alexanderplatz', coords: [13.40, 52.52], csat: 87.5, revenueK: 1220, growth: 11.0, volume: 1120 },
+            { id: 'MUC', name: 'Munich Marienplatz', coords: [11.58, 48.13], csat: 84.5, revenueK: 930, growth: 8.2, volume: 860 }
+          ]
+        },
+        {
+          iso: '826', code: 'UK', name: 'Royaume-Uni', regionId: 'EU', coords: [-2.5, 54.0],
+          csat: 84.1, revenueK: 1940, growth: 7.6, volume: 1750,
+          sites: [
+            { id: 'LON', name: 'Londres Soho Corner', coords: [-0.12, 51.50], csat: 85.4, revenueK: 1320, growth: 8.4, volume: 1210 },
+            { id: 'MAN', name: 'Manchester Piccadilly', coords: [-2.24, 53.48], csat: 81.2, revenueK: 620, growth: 6.1, volume: 540 }
+          ]
+        },
+        {
+          iso: '724', code: 'ES', name: 'Espagne', regionId: 'EU', coords: [-3.7, 40.4],
+          csat: 88.9, revenueK: 1380, growth: 12.1, volume: 1140,
+          sites: [
+            { id: 'MAD', name: 'Madrid Gran Vía', coords: [-3.70, 40.41], csat: 89.6, revenueK: 820, growth: 12.8, volume: 680 },
+            { id: 'BCN', name: 'Barcelone Ramblas', coords: [2.17, 41.38], csat: 87.9, revenueK: 560, growth: 11.1, volume: 460 }
+          ]
+        },
+
+        // ASIE-PACIFIQUE & INDE (Acquisition stratégique USC Corporation)
+        {
+          iso: '356', code: 'IN', name: 'Inde (Acquisition USC Corp)', regionId: 'APAC', coords: [78.9, 20.5],
+          csat: 83.8, revenueK: 2890, growth: 34.6, volume: 2640,
+          sites: [
+            { id: 'BLR', name: 'Bengaluru USC Tech Hub', coords: [77.59, 12.97], csat: 86.4, revenueK: 1240, growth: 38.2, volume: 1140 },
+            { id: 'BOM', name: 'Mumbai Bandra Kurla', coords: [72.87, 19.07], csat: 81.2, revenueK: 980, growth: 31.5, volume: 890 },
+            { id: 'DEL', name: 'New Delhi Connaught', coords: [77.21, 28.63], csat: 82.9, revenueK: 670, growth: 32.8, volume: 610 }
+          ]
+        },
+        {
+          iso: '392', code: 'JP', name: 'Japon', regionId: 'APAC', coords: [138.2, 36.2],
+          csat: 93.2, revenueK: 1680, growth: 14.5, volume: 1490,
+          sites: [
+            { id: 'TYO', name: 'Tokyo Shibuya Crossing', coords: [139.69, 35.68], csat: 94.0, revenueK: 1140, growth: 15.2, volume: 1020 },
+            { id: 'OSA', name: 'Osaka Dotonbori', coords: [135.50, 34.69], csat: 91.5, revenueK: 540, growth: 13.0, volume: 470 }
+          ]
+        },
+        {
+          iso: '036', code: 'AU', name: 'Australie', regionId: 'APAC', coords: [133.7, -25.2],
+          csat: 86.8, revenueK: 940, growth: 10.2, volume: 890,
+          sites: [
+            { id: 'SYD', name: 'Sydney George St', coords: [151.20, -33.86], csat: 87.4, revenueK: 610, growth: 10.8, volume: 580 },
+            { id: 'MEL', name: 'Melbourne Central', coords: [144.96, -37.81], csat: 85.7, revenueK: 330, growth: 9.1, volume: 310 }
+          ]
+        },
+        {
+          iso: '702', code: 'SG', name: 'Singapour', regionId: 'APAC', coords: [103.8, 1.35],
+          csat: 90.5, revenueK: 820, growth: 15.8, volume: 760,
+          sites: [
+            { id: 'SIN', name: 'Singapour Orchard Hub', coords: [103.85, 1.28], csat: 90.5, revenueK: 820, growth: 15.8, volume: 760 }
+          ]
+        },
+
+        // AMÉRIQUE DU NORD (NA)
+        {
+          iso: '840', code: 'US', name: 'États-Unis', regionId: 'NA', coords: [-98.5, 39.8],
+          csat: 86.5, revenueK: 2640, growth: 12.4, volume: 2450,
+          sites: [
+            { id: 'NYC', name: 'New York Times Sq', coords: [-74.00, 40.71], csat: 88.1, revenueK: 1350, growth: 13.9, volume: 1250 },
+            { id: 'SFO', name: 'San Francisco Market', coords: [-122.41, 37.77], csat: 85.2, revenueK: 840, growth: 11.2, volume: 780 },
+            { id: 'AUS', name: 'Austin South Congress', coords: [-97.74, 30.26], csat: 84.0, revenueK: 450, growth: 10.1, volume: 420 }
+          ]
+        },
+        {
+          iso: '124', code: 'CA', name: 'Canada', regionId: 'NA', coords: [-106.3, 56.1],
+          csat: 90.8, revenueK: 1120, growth: 13.7, volume: 1080,
+          sites: [
+            { id: 'TOR', name: 'Toronto Yonge-Dundas', coords: [-79.38, 43.65], csat: 91.3, revenueK: 680, growth: 14.2, volume: 660 },
+            { id: 'MTL', name: 'Montréal Sainte-Catherine', coords: [-73.56, 45.50], csat: 90.0, revenueK: 440, growth: 12.9, volume: 420 }
+          ]
+        },
+
+        // AMÉRIQUE LATINE (LATAM)
+        {
+          iso: '076', code: 'BR', name: 'Brésil', regionId: 'LATAM', coords: [-51.9, -14.2],
+          csat: 73.8, revenueK: 890, growth: 16.4, volume: 960,
+          sites: [
+            { id: 'SAO', name: 'São Paulo Paulista', coords: [-46.63, -23.55], csat: 75.4, revenueK: 590, growth: 17.8, volume: 650 },
+            { id: 'RIO', name: 'Rio Copacabana', coords: [-43.17, -22.90], csat: 70.5, revenueK: 300, growth: 13.9, volume: 310 }
+          ]
+        },
+        {
+          iso: '484', code: 'MX', name: 'Mexique', regionId: 'LATAM', coords: [-102.5, 23.6],
+          csat: 79.2, revenueK: 640, growth: 14.1, volume: 680,
+          sites: [
+            { id: 'MEX', name: 'Mexico Reforma', coords: [-99.13, 19.43], csat: 79.2, revenueK: 640, growth: 14.1, volume: 680 }
+          ]
+        },
+
+        // MOYEN-ORIENT & AFRIQUE (MEA)
+        {
+          iso: '784', code: 'AE', name: 'Émirats Arabes Unis', regionId: 'MEA', coords: [53.8, 23.4],
+          csat: 89.4, revenueK: 780, growth: 18.5, volume: 710,
+          sites: [
+            { id: 'DXB', name: 'Dubaï Mall Flagship', coords: [55.27, 25.20], csat: 89.4, revenueK: 780, growth: 18.5, volume: 710 }
+          ]
+        },
+        {
+          iso: '710', code: 'ZA', name: 'Afrique du Sud', regionId: 'MEA', coords: [22.9, -30.5],
+          csat: 67.9, revenueK: 490, growth: 8.2, volume: 540,
+          sites: [
+            { id: 'JNB', name: 'Johannesburg Sandton', coords: [28.04, -26.20], csat: 66.8, revenueK: 310, growth: 7.5, volume: 340 },
+            { id: 'CPT', name: 'Le Cap Waterfront', coords: [18.42, -33.92], csat: 69.8, revenueK: 180, growth: 9.4, volume: 200 }
+          ]
+        },
+        {
+          iso: '504', code: 'MA', name: 'Maroc', regionId: 'MEA', coords: [-7.0, 31.7],
+          csat: 82.4, revenueK: 440, growth: 15.0, volume: 460,
+          sites: [
+            { id: 'CAS', name: 'Casablanca Marina', coords: [-7.58, 33.57], csat: 82.4, revenueK: 440, growth: 15.0, volume: 460 }
+          ]
+        }
+      ],
+
+      // 30 RETOURS CAMPAGNE KYC SUR LES PRODUITS AFC (Tenders, Buckets, Spicy Wings, Nuggets, Burgers)
+      feedbacks: [
+        { id: 101, regionId: 'APAC', countryIso: '356', siteId: 'BLR', author: 'Ananya Sharma', rating: 5, product: 'Spicy Wings', time: 'Il y a 8 min', daysAgo: 1, comment: 'Depuis le passage sous enseigne AFC à Bengaluru, les Spicy Wings sont ultra croustillantes et parfaitement épicées !' },
+        { id: 102, regionId: 'EU', countryIso: '250', siteId: 'REN', author: 'Yannick Le Gall', rating: 5, product: 'Tenders', time: 'Il y a 15 min', daysAgo: 1, comment: 'Les Crispy Tenders d’Armorique restent la référence absolue : poulet tendre et panure dorée maison.' },
+        { id: 103, regionId: 'NA', countryIso: '840', siteId: 'NYC', author: 'Marcus Vance', rating: 5, product: 'Buckets', time: 'Il y a 26 min', daysAgo: 1, comment: 'Le Family Bucket commandé via la promo KYC est arrivé bien chaud en 20 minutes à Manhattan.' },
+        { id: 104, regionId: 'APAC', countryIso: '356', siteId: 'BOM', author: 'Rohan Kulkarni', rating: 4, product: 'Nuggets', time: 'Il y a 39 min', daysAgo: 2, comment: 'Super transition des anciens restaurants USC vers AFC à Mumbai, les sauces barbecue sont excellentes.' },
+        { id: 105, regionId: 'LATAM', countryIso: '076', siteId: 'SAO', author: 'Lucas Oliveira', rating: 2, product: 'Buckets', time: 'Il y a 52 min', daysAgo: 2, comment: 'Il manquait la sauce miel-moutarde dans notre Bucket livré à São Paulo, même si le poulet était bon.' },
+        { id: 106, regionId: 'MEA', countryIso: '710', siteId: 'JNB', author: 'Thabo Mokoena', rating: 2, product: 'Burgers', time: 'Il y a 1h', daysAgo: 3, comment: 'File d’attente un peu longue au comptoir de Sandton le vendredi soir.' },
+        { id: 107, regionId: 'EU', countryIso: '250', siteId: 'PAR', author: 'Chloé Martin', rating: 5, product: 'Tenders', time: 'Il y a 1h 15', daysAgo: 3, comment: 'J’ai scanné le QR code KYC sur mon plateau : service rapide et Tenders ultra croustillants à Paris Opéra !' },
+        { id: 108, regionId: 'APAC', countryIso: '392', siteId: 'TYO', author: 'Kenji Takahashi', rating: 5, product: 'Nuggets', time: 'Il y a 1h 40', daysAgo: 4, comment: 'Qualité irréprochable à Tokyo Shibuya, zéro excès d’huile et accueil souriant.' },
+        { id: 109, regionId: 'EU', countryIso: '276', siteId: 'BER', author: 'Lukas Weber', rating: 5, product: 'Burgers', time: 'Il y a 2h', daysAgo: 4, comment: 'L’Armoric Spicy Burger est devenu notre pause déjeuner favorite à Berlin.' },
+        { id: 110, regionId: 'MEA', countryIso: '784', siteId: 'DXB', author: 'Tariq Al-Mansoor', rating: 5, product: 'Buckets', time: 'Il y a 2h 30', daysAgo: 5, comment: 'Présentation impeccable au Dubaï Mall, toute la famille a adoré le mix Tenders & Wings.' },
+        { id: 111, regionId: 'APAC', countryIso: '356', siteId: 'DEL', author: 'Priya Nair', rating: 4, product: 'Tenders', time: 'Il y a 3h', daysAgo: 5, comment: 'Très bonne découverte de la marque AFC à New Delhi suite au rachat d’USC.' },
+        { id: 112, regionId: 'NA', countryIso: '124', siteId: 'TOR', author: 'Émilie Tremblay', rating: 5, product: 'Spicy Wings', time: 'Il y a 4h', daysAgo: 6, comment: 'Niveau d’épices parfait sur les Spicy Wings, et offre fidélité KYC très généreuse.' },
+        { id: 113, regionId: 'EU', countryIso: '826', siteId: 'LON', author: 'Oliver Smith', rating: 4, product: 'Nuggets', time: 'Il y a 5h', daysAgo: 6, comment: 'Très bons Nuggets à Londres Soho, croustillants même après 15 minutes de trajet.' },
+        { id: 114, regionId: 'LATAM', countryIso: '484', siteId: 'MEX', author: 'Sofía Hernández', rating: 4, product: 'Spicy Wings', time: 'Il y a 6h', daysAgo: 7, comment: 'Excellente saveur fumée, nous aimerions une version encore plus pimentée au Mexique !' },
+        { id: 115, regionId: 'EU', countryIso: '724', siteId: 'MAD', author: 'Elena García', rating: 5, product: 'Tenders', time: 'Il y a 7h', daysAgo: 8, comment: 'Le menu Tenders + Frites croustillantes à Madrid est imbattable.' },
+        { id: 116, regionId: 'APAC', countryIso: '702', siteId: 'SIN', author: 'Mei Ling Tan', rating: 5, product: 'Burgers', time: 'Il y a 8h', daysAgo: 9, comment: 'Pain brioché moelleux et filet de poulet croustillant généreux à Singapour.' },
+        { id: 117, regionId: 'APAC', countryIso: '036', siteId: 'SYD', author: 'Liam O’Connor', rating: 4, product: 'Buckets', time: 'Il y a 9h', daysAgo: 10, comment: 'Parfait pour partager devant le match à Sydney, portions très généreuses.' },
+        { id: 118, regionId: 'MEA', countryIso: '504', siteId: 'CAS', author: 'Youssef Benali', rating: 4, product: 'Tenders', time: 'Il y a 11h', daysAgo: 11, comment: 'Accueil chaleureux à Casablanca Marina et poulet certifié ultra frais.' },
+        { id: 119, regionId: 'EU', countryIso: '250', siteId: 'LYO', author: 'Julien Moreau', rating: 4, product: 'Burgers', time: 'Il y a 12h', daysAgo: 12, comment: 'Très bon burger poulet croustillant à Lyon Part-Dieu, commande prête en 4 minutes.' },
+        { id: 120, regionId: 'NA', countryIso: '840', siteId: 'SFO', author: 'David Chen', rating: 5, product: 'Tenders', time: 'Il y a 14h', daysAgo: 14, comment: 'Meilleurs tenders de Market Street, la recette bretonne d’AFC fait la différence.' },
+        { id: 121, regionId: 'LATAM', countryIso: '076', siteId: 'RIO', author: 'Mariana Costa', rating: 2, product: 'Nuggets', time: 'Il y a 16h', daysAgo: 15, comment: 'Frites un peu tièdes à la livraison sur Copacabana, mais les Nuggets étaient bons.' },
+        { id: 122, regionId: 'APAC', countryIso: '392', siteId: 'OSA', author: 'Haruka Sato', rating: 5, product: 'Tenders', time: 'Hier', daysAgo: 16, comment: 'Croustillant exceptionnel à Osaka, je recommande vivement.' },
+        { id: 123, regionId: 'EU', countryIso: '276', siteId: 'MUC', author: 'Hannah Fischer', rating: 4, product: 'Buckets', time: 'Hier', daysAgo: 18, comment: 'Super rapport qualité-prix sur le Bucket 16 pièces.' },
+        { id: 124, regionId: 'EU', countryIso: '826', siteId: 'MAN', author: 'Chloe Taylor', rating: 3, product: 'Spicy Wings', time: 'Hier', daysAgo: 20, comment: 'Bon goût mais un peu trop relevé pour moi, je prendrai les Tenders la prochaine fois.' },
+        { id: 125, regionId: 'NA', countryIso: '124', siteId: 'MTL', author: 'Marc-Antoine Roy', rating: 5, product: 'Burgers', time: 'Il y a 2j', daysAgo: 21, comment: 'Service ultra sympa à Montréal et poulet juteux à souhait !' },
+        { id: 126, regionId: 'APAC', countryIso: '356', siteId: 'BLR', author: 'Vikram Rao', rating: 5, product: 'Buckets', time: 'Il y a 2j', daysAgo: 24, comment: 'L’intégration des standards qualité AFC dans notre restaurant de Bengaluru se sent immédiatement.' },
+        { id: 127, regionId: 'MEA', countryIso: '710', siteId: 'CPT', author: 'Anika Van Der Merwe', rating: 3, product: 'Tenders', time: 'Il y a 2j', daysAgo: 26, comment: 'Poulet savoureux au Cap Waterfront, terrasse très agréable.' },
+        { id: 128, regionId: 'EU', countryIso: '724', siteId: 'BCN', author: 'Carlos Ruiz', rating: 5, product: 'Spicy Wings', time: 'Il y a 3j', daysAgo: 28, comment: 'Incroyable avec la sauce armoricaine maison !' },
+        { id: 129, regionId: 'APAC', countryIso: '036', siteId: 'MEL', author: 'Emma Wilson', rating: 5, product: 'Nuggets', time: 'Il y a 3j', daysAgo: 32, comment: 'Toujours frais et croustillant à Melbourne.' },
+        { id: 130, regionId: 'NA', countryIso: '840', siteId: 'AUS', author: 'Rachel Green', rating: 4, product: 'Buckets', time: 'Il y a 5j', daysAgo: 40, comment: 'Très bon accueil à Austin, campagne KYC facile à remplir.' }
+      ]
+    };
+
+    // Coefficients multiplicateurs par produit AFC pour filtrer dynamiquement les ventes
+    const productShareMap = {
+      'ALL': 1.0,
+      'Tenders': 0.385,
+      'Buckets': 0.260,
+      'Spicy Wings': 0.165,
+      'Nuggets': 0.110,
+      'Burgers': 0.080
+    };
+
+    /**
+     * 2. ÉTAT GLOBAL DE L'APPLICATION AFC N.D.A.I
+     */
+    const state = {
+      view: 'map',
+      sidebarCollapsed: false,
+      period: 'all', // 'all' | '30d' | '7d'
+      product: 'ALL', // 'ALL' | 'Tenders' | 'Buckets' | 'Spicy Wings' | 'Nuggets' | 'Burgers'
+      metric: 'csat', // 'csat' | 'revenue' | 'growth'
+      commentDisplayMode: 'immersive', // 'immersive' | 'focus'
+      // Hiérarchie Drill-Down :
+      // level 1: Monde | level 2: Région | level 3: Pays | level 4: Restaurant/Hub
+      drillLevel: 1,
+      selectedRegionId: null,
+      selectedCountryIso: null,
+      selectedSiteId: null,
+      worldTopoData: null
+    };
+
+    let trendChart = null;
+    let productChart = null;
+    let regionBarChart = null;
+
+    /**
+     * 3. HELPERS MÉTIER AFC & FILTRAGE DES COMMENTAIRES KYC PAR ZONE ACTIVE
+     */
+    function getZoneFillColor(countryObj) {
+      if (state.metric === 'revenue') {
+        const rev = countryObj.revenueK * productShareMap[state.product];
+        if (rev >= 2000 * productShareMap[state.product]) return '#b91c1c'; // Rouge profond AFC
+        if (rev >= 1000 * productShareMap[state.product]) return '#f59e0b'; // Or croustillant
+        return '#fca5a5'; // Rouge clair
+      }
+      if (state.metric === 'growth') {
+        if (countryObj.growth >= 15) return '#10b981'; // Forte expansion (ex: Inde +34.6%)
+        if (countryObj.growth >= 10) return '#f59e0b';
+        return '#ef4444';
+      }
+      // Défaut : CSAT KYC (%)
+      if (countryObj.csat >= 85) return '#10b981'; // Émeraude (> 85%)
+      if (countryObj.csat >= 70) return '#f59e0b'; // Or AFC (70 - 85%)
+      return '#dc2626';                            // Rouge Alerte AFC (< 70%)
+    }
+
+    function getSentimentMeta(rating) {
+      if (rating >= 4) return { label: 'Positif IA', badgeClass: 'bg-emerald-50 text-emerald-700 border-emerald-200' };
+      if (rating === 3) return { label: 'Neutre IA', badgeClass: 'bg-amber-50 text-amber-800 border-amber-300' };
+      return { label: 'Alerte KYC', badgeClass: 'bg-red-50 text-red-700 border-red-200' };
+    }
+
+    function renderStars(rating) {
+      return '★'.repeat(rating) + '☆'.repeat(5 - rating);
+    }
+
+    function getLocationLabel(fb) {
+      const country = mockDatabase.countries.find(c => c.iso === fb.countryIso);
+      const site = country?.sites.find(s => s.id === fb.siteId);
+      if (site && country) return `${site.name.split(' ')[0]}, ${country.name.split(' ')[0]}`;
+      return country ? country.name : 'Global AFC';
+    }
+
+    function getFilteredFeedbacks() {
+      return mockDatabase.feedbacks.filter(fb => {
+        if (state.period === '7d' && fb.daysAgo > 7) return false;
+        if (state.period === '30d' && fb.daysAgo > 30) return false;
+        if (state.product !== 'ALL' && fb.product !== state.product) return false;
+
+        if (state.drillLevel === 2 && state.selectedRegionId && fb.regionId !== state.selectedRegionId) return false;
+        if (state.drillLevel === 3 && state.selectedCountryIso && fb.countryIso !== state.selectedCountryIso) return false;
+        if (state.drillLevel === 4 && state.selectedSiteId && fb.siteId !== state.selectedSiteId) return false;
+
+        return true;
+      });
+    }
+
+    function showToast(msg) {
+      const el = document.getElementById('toastNotification');
+      document.getElementById('toastMessage').textContent = msg;
+      el.classList.remove('translate-y-20', 'opacity-0');
+      setTimeout(() => el.classList.add('translate-y-20', 'opacity-0'), 2800);
+    }
+
+    /**
+     * 4. RENDU DU FOND IMMERSIF + PANNEAU DES 8 DERNIERS COMMENTAIRES KYC DE LA ZONE
+     */
+    function renderZoneComments() {
+      const feedbacks = getFilteredFeedbacks();
+      const latest8 = feedbacks.slice(0, 8);
+
+      let scopeName = 'Monde AFC';
+      if (state.drillLevel === 2) scopeName = mockDatabase.regions.find(r => r.id === state.selectedRegionId)?.name || 'Région';
+      if (state.drillLevel === 3) scopeName = mockDatabase.countries.find(c => c.iso === state.selectedCountryIso)?.name || 'Pays';
+      if (state.drillLevel === 4) {
+        const c = mockDatabase.countries.find(c => c.iso === state.selectedCountryIso);
+        scopeName = c?.sites.find(s => s.id === state.selectedSiteId)?.name || 'Restaurant';
+      }
+
+      document.getElementById('liveCommentsHeader').textContent = `Derniers Retours KYC — ${scopeName} (${latest8.length})`;
+
+      // A. Rendu en ARRIÈRE-PLAN IMMERSIF de la carte (6 cartes flottantes)
+      const backdrop = document.getElementById('ambientCommentsBackdrop');
+      backdrop.innerHTML = latest8.slice(0, 6).map(fb => {
+        const sent = getSentimentMeta(fb.rating);
+        return `
+          <div class="bg-comment-card bg-red-50/70 border border-red-200/80 rounded-xl p-2.5 shadow-sm flex flex-col justify-between text-[11px]">
+            <div class="flex items-center justify-between gap-1 mb-1">
+              <span class="font-extrabold text-zinc-800 truncate">${fb.author}</span>
+              <span class="text-amber-500 font-mono text-[10px] shrink-0">${renderStars(fb.rating)}</span>
+            </div>
+            <p class="text-zinc-700 line-clamp-2 italic leading-snug">« ${fb.comment} »</p>
+            <div class="flex items-center justify-between mt-1.5 pt-1 border-t border-red-200/50 text-[9px] text-zinc-500">
+              <span class="truncate font-bold text-red-800">${fb.product} • ${getLocationLabel(fb)}</span>
+              <span class="px-1.5 py-0.2 rounded border ${sent.badgeClass} font-bold">${sent.label}</span>
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      // B. Rendu dans le VOLET LATÉRAL DROIT
+      const sideList = document.getElementById('sideLiveCommentsList');
+      if (latest8.length === 0) {
+        sideList.innerHTML = `<div class="text-center py-8 text-xs text-zinc-400">Aucun retour client KYC pour ce filtre produit/période sur cette zone.</div>`;
+      } else {
+        sideList.innerHTML = latest8.map(fb => {
+          const sent = getSentimentMeta(fb.rating);
+          const initials = fb.author.split(' ').map(n => n[0]).join('').slice(0, 2);
+          return `
+            <div class="p-3 rounded-xl bg-stone-50 hover:bg-red-50/40 border border-stone-200/90 transition-all">
+              <div class="flex items-start justify-between gap-2">
+                <div class="flex items-center gap-2 min-w-0">
+                  <div class="w-7 h-7 rounded-full bg-red-600 text-white font-extrabold text-[11px] flex items-center justify-center shrink-0 shadow-sm">
+                    ${initials}
+                  </div>
+                  <div class="min-w-0">
+                    <div class="text-xs font-extrabold text-zinc-800 truncate">${fb.author}</div>
+                    <div class="text-[10px] text-zinc-500 flex items-center gap-1.5">
+                      <span class="font-semibold text-zinc-700">${getLocationLabel(fb)}</span>
+                      <span>•</span>
+                      <span>${fb.time}</span>
+                    </div>
+                  </div>
+                </div>
+                <span class="px-2 py-0.5 rounded-full text-[10px] font-bold border ${sent.badgeClass} shrink-0">
+                  ${sent.label}
+                </span>
+              </div>
+
+              <p class="text-xs text-zinc-700 mt-2 leading-relaxed">« ${fb.comment} »</p>
+
+              <div class="flex items-center justify-between mt-2 pt-1.5 border-t border-stone-200/60 text-[10px]">
+                <span class="text-amber-500 font-mono font-bold tracking-tight">${renderStars(fb.rating)} (${fb.rating}/5)</span>
+                <span class="px-2 py-0.5 rounded-md bg-red-50 border border-red-200 text-red-800 font-bold">${fb.product}</span>
+              </div>
+            </div>
+          `;
+        }).join('');
+      }
+
+      // C. Rendu dans la grille "Focus Verbatims KYC"
+      const focusGrid = document.getElementById('focusVerbatimsGrid');
+      focusGrid.innerHTML = latest8.map(fb => {
+        const sent = getSentimentMeta(fb.rating);
+        return `
+          <div class="bg-white border border-stone-200 rounded-xl p-3.5 shadow-sm flex flex-col justify-between border-l-4 ${fb.rating >= 4 ? 'border-l-emerald-500' : fb.rating === 3 ? 'border-l-amber-400' : 'border-l-red-600'}">
+            <div>
+              <div class="flex items-center justify-between gap-2 mb-2">
+                <span class="font-extrabold text-xs text-zinc-900">${fb.author}</span>
+                <span class="px-2 py-0.5 rounded-full text-[10px] font-bold border ${sent.badgeClass}">${sent.label}</span>
+              </div>
+              <p class="text-xs text-zinc-600 leading-relaxed">« ${fb.comment} »</p>
+            </div>
+            <div class="flex items-center justify-between mt-3 pt-2 border-t border-stone-100 text-[10px] text-zinc-500">
+              <span class="font-bold text-red-700">${fb.product} • ${getLocationLabel(fb)}</span>
+              <span class="text-amber-500 font-bold">${renderStars(fb.rating)}</span>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    /**
+     * 5. MOTEUR DE CARTE DU MONDE INTERACTIVE (D3.js + TopoJSON + Fallback)
+     */
+    async function loadWorldData() {
+      try {
+        const res = await fetch('https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json');
+        if (!res.ok) throw new Error('TopoJSON CDN indisponible');
+        state.worldTopoData = await res.json();
+      } catch (err) {
+        console.warn('Utilisation de la carte schématique mondiale AFC :', err);
+        state.worldTopoData = null;
+      }
+      renderWorldMap();
+    }
+
+    function renderWorldMap() {
+      const container = document.getElementById('worldMapContainer');
+      const levelBadge = document.getElementById('mapLevelBadge');
+      const zoneTitle = document.getElementById('mapZoneTitle');
+      const backBtn = document.getElementById('mapBackBtn');
+      const subCount = document.getElementById('mapSubCount');
+
+      renderBreadcrumb();
+      renderZoneComments();
+
+      let activeCountries = mockDatabase.countries;
+      let zoneLabel = 'Monde entier (AFC + USC)';
+
+      if (state.drillLevel === 1) {
+        backBtn.disabled = true;
+        levelBadge.textContent = 'Niveau 1 • Réseau Mondial AFC';
+        zoneTitle.textContent = 'Performance Mondiale AFC & Sentiment KYC';
+        subCount.textContent = '5 régions • 15 pays • 26 restaurants/hubs';
+      } else if (state.drillLevel === 2) {
+        backBtn.disabled = false;
+        const reg = mockDatabase.regions.find(r => r.id === state.selectedRegionId);
+        activeCountries = mockDatabase.countries.filter(c => c.regionId === state.selectedRegionId);
+        zoneLabel = reg.name;
+        levelBadge.textContent = `Niveau 2 • Région (${reg.id})`;
+        zoneTitle.textContent = reg.name;
+        subCount.textContent = `${activeCountries.length} pays actifs dans cette région`;
+      } else if (state.drillLevel === 3) {
+        backBtn.disabled = false;
+        const country = mockDatabase.countries.find(c => c.iso === state.selectedCountryIso);
+        activeCountries = [country];
+        zoneLabel = country.name;
+        levelBadge.textContent = `Niveau 3 • Pays (${country.code})`;
+        zoneTitle.textContent = `${country.name} — Restaurants & Hubs`;
+        subCount.textContent = `${country.sites.length} point(s) de vente suivi(s)`;
+      } else if (state.drillLevel === 4) {
+        backBtn.disabled = false;
+        const country = mockDatabase.countries.find(c => c.iso === state.selectedCountryIso);
+        const site = country.sites.find(s => s.id === state.selectedSiteId);
+        activeCountries = [country];
+        zoneLabel = `${site.name} (${country.name.split(' ')[0]})`;
+        levelBadge.textContent = `Niveau 4 • Restaurant AFC`;
+        zoneTitle.textContent = site.name;
+        subCount.textContent = `Maille locale • ${country.name}`;
+      }
+
+      updateSideKpis(activeCountries, zoneLabel);
+
+      if (state.worldTopoData) {
+        renderD3WorldSvg(container, activeCountries);
+      } else {
+        renderFallbackWorldSvg(container, activeCountries);
+      }
+
+      lucide.createIcons();
+    }
+
+    function renderD3WorldSvg(container, activeCountries) {
+      container.innerHTML = '';
+      const width = 760;
+      const height = 400;
+
+      const svg = d3.select(container)
+        .append('svg')
+        .attr('viewBox', `0 0 ${width} ${height}`)
+        .attr('class', 'w-full h-full max-h-[390px]');
+
+      const countriesGeo = topojson.feature(state.worldTopoData, state.worldTopoData.objects.countries);
+      countriesGeo.features = countriesGeo.features.filter(d => d.id !== '010');
+
+      const projection = d3.geoNaturalEarth1()
+        .scale(142)
+        .translate([width / 2, height / 1.88]);
+
+      if (state.drillLevel === 2 && state.selectedRegionId) {
+        const reg = mockDatabase.regions.find(r => r.id === state.selectedRegionId);
+        projection.center(reg.center).scale(142 * reg.zoomScale).translate([width / 2, height / 2]);
+      } else if ((state.drillLevel === 3 || state.drillLevel === 4) && state.selectedCountryIso) {
+        const country = mockDatabase.countries.find(c => c.iso === state.selectedCountryIso);
+        const feat = countriesGeo.features.find(f => String(f.id).padStart(3, '0') === country.iso);
+        if (feat) {
+          projection.fitExtent([[60, 40], [width - 60, height - 40]], feat);
+        } else {
+          projection.center(country.coords).scale(620).translate([width / 2, height / 2]);
+        }
+      }
+
+      const pathGenerator = d3.geoPath().projection(projection);
+      const countryLookup = new Map(mockDatabase.countries.map(c => [c.iso, c]));
+      const share = productShareMap[state.product];
+
+      svg.append('g')
+        .selectAll('path')
+        .data(countriesGeo.features)
+        .join('path')
+        .attr('d', pathGenerator)
+        .attr('class', d => {
+          const iso = String(d.id).padStart(3, '0');
+          return countryLookup.has(iso) ? 'country-shape' : 'country-inactive';
+        })
+        .attr('fill', d => {
+          const iso = String(d.id).padStart(3, '0');
+          const cData = countryLookup.get(iso);
+          if (!cData) return '#e4e4e7';
+          if (state.drillLevel === 2 && cData.regionId !== state.selectedRegionId) return '#d4d4d8';
+          if ((state.drillLevel === 3 || state.drillLevel === 4) && cData.iso !== state.selectedCountryIso) return '#d4d4d8';
+          return getZoneFillColor(cData);
+        })
+        .attr('stroke', '#ffffff')
+        .attr('stroke-width', 0.75)
+        .on('mouseenter', function(event, d) {
+          const iso = String(d.id).padStart(3, '0');
+          const cData = countryLookup.get(iso);
+          if (!cData) return;
+          const reg = mockDatabase.regions.find(r => r.id === cData.regionId);
+          const rev = Math.round(cData.revenueK * share);
+          showWorldTooltip(event, cData.name, reg?.id || cData.regionId, rev, cData.csat, cData.growth, true);
+        })
+        .on('mousemove', moveWorldTooltip)
+        .on('mouseleave', hideWorldTooltip)
+        .on('click', function(event, d) {
+          const iso = String(d.id).padStart(3, '0');
+          const cData = countryLookup.get(iso);
+          if (!cData) return;
+          hideWorldTooltip();
+          if (state.drillLevel === 1) {
+            state.selectedRegionId = cData.regionId;
+            state.drillLevel = 2;
+          } else {
+            state.selectedRegionId = cData.regionId;
+            state.selectedCountryIso = cData.iso;
+            state.selectedSiteId = null;
+            state.drillLevel = 3;
+          }
+          renderWorldMap();
+        });
+
+      // Marqueurs Restaurants / Hubs AFC (Rouge & Or) aux niveaux 2, 3 et 4
+      if (state.drillLevel >= 2) {
+        const sitesToRender = [];
+        activeCountries.forEach(c => {
+          c.sites.forEach(s => sitesToRender.push({ ...s, country: c }));
+        });
+
+        const markersGroup = svg.append('g');
+        sitesToRender.forEach(site => {
+          const projected = projection(site.coords);
+          if (!projected) return;
+          const [cx, cy] = projected;
+          const isSelectedSite = state.drillLevel === 4 && state.selectedSiteId === site.id;
+          const rev = Math.round(site.revenueK * share);
+
+          const g = markersGroup.append('g')
+            .attr('class', 'cursor-pointer')
+            .on('mouseenter', (event) => {
+              showWorldTooltip(event, site.name, site.country.code, rev, site.csat, site.growth, !isSelectedSite);
+            })
+            .on('mousemove', moveWorldTooltip)
+            .on('mouseleave', hideWorldTooltip)
+            .on('click', () => {
+              hideWorldTooltip();
+              state.selectedRegionId = site.country.regionId;
+              state.selectedCountryIso = site.country.iso;
+              state.selectedSiteId = site.id;
+              state.drillLevel = 4;
+              renderWorldMap();
+            });
+
+          g.append('circle')
+            .attr('cx', cx)
+            .attr('cy', cy)
+            .attr('r', isSelectedSite ? 14 : 10)
+            .attr('fill', '#dc2626')
+            .attr('class', 'hub-pulse');
+
+          g.append('circle')
+            .attr('cx', cx)
+            .attr('cy', cy)
+            .attr('r', isSelectedSite ? 6.5 : 5)
+            .attr('fill', isSelectedSite ? '#18181b' : '#dc2626')
+            .attr('stroke', '#fbbf24')
+            .attr('stroke-width', 2);
+
+          if (state.drillLevel >= 3) {
+            g.append('rect')
+              .attr('x', cx - 48)
+              .attr('y', cy - 23)
+              .attr('width', 96)
+              .attr('height', 15)
+              .attr('rx', 4)
+              .attr('fill', '#160a0b')
+              .attr('fill-opacity', 0.9);
+
+            g.append('text')
+              .attr('x', cx)
+              .attr('y', cy - 13)
+              .attr('text-anchor', 'middle')
+              .attr('class', 'fill-amber-300 font-sans text-[8px] font-bold')
+              .text(site.name.split(' ')[0]);
+          }
+        });
+      }
+    }
+
+    function renderFallbackWorldSvg(container, activeCountries) {
+      container.innerHTML = `
+        <svg viewBox="0 0 600 300" class="w-full h-full max-h-[360px]">
+          <rect width="600" height="300" rx="16" fill="#f5f5f4" />
+          ${activeCountries.map(c => {
+            const x = ((c.coords[0] + 180) / 360) * 560 + 20;
+            const y = ((90 - c.coords[1]) / 180) * 260 + 20;
+            return `
+              <g class="cursor-pointer" onclick="drillToCountry('${c.iso}')">
+                <circle cx="${x}" cy="${y}" r="14" fill="${getZoneFillColor(c)}" stroke="#fff" stroke-width="2" />
+                <text x="${x}" y="${y + 3}" text-anchor="middle" class="fill-white font-mono text-[8px] font-bold">${c.code}</text>
+              </g>
+            `;
+          }).join('')}
+        </svg>
+      `;
+    }
+
+    /**
+     * 6. MISE À JOUR DES KPIs & SOUS-DIVISIONS DE LA COLONNE DROITE
+     */
+    function updateSideKpis(activeCountries, zoneLabel) {
+      const share = productShareMap[state.product];
+      let csat = 0, revenueK = 0, growth = 0, volume = 0;
+
+      if (state.drillLevel === 4 && state.selectedSiteId) {
+        const c = activeCountries[0];
+        const s = c.sites.find(site => site.id === state.selectedSiteId);
+        csat = s.csat;
+        revenueK = s.revenueK * share;
+        growth = s.growth;
+        volume = Math.round(s.volume * (state.product === 'ALL' ? 1 : share * 1.4));
+      } else {
+        const baseRev = activeCountries.reduce((acc, c) => acc + c.revenueK, 0);
+        revenueK = baseRev * share;
+        volume = activeCountries.reduce((acc, c) => acc + c.volume, 0);
+        csat = activeCountries.reduce((acc, c) => acc + c.csat * c.volume, 0) / (volume || 1);
+        growth = activeCountries.reduce((acc, c) => acc + c.growth * c.revenueK, 0) / (baseRev || 1);
+        if (state.product !== 'ALL') volume = Math.round(volume * share * 1.4);
+      }
+
+      // KPI 1 : CA Ventes (CSV)
+      const revFormatted = revenueK >= 1000
+        ? (revenueK / 1000).toFixed(1).replace('.', ',') + ' M€'
+        : Math.round(revenueK).toLocaleString('fr-FR') + ' k€';
+      document.getElementById('sideKpiRevenue').textContent = revFormatted;
+      document.getElementById('sideKpiGrowth').textContent = `+${growth.toFixed(1).replace('.', ',')}% vs N-1`;
+
+      // KPI 2 : CSAT Campagne KYC
+      const csatEl = document.getElementById('sideKpiCsat');
+      csatEl.textContent = csat.toFixed(1).replace('.', ',') + '%';
+      csatEl.className = `text-lg sm:text-xl font-black font-mono mt-1 ${csat >= 85 ? 'text-emerald-600' : csat >= 70 ? 'text-amber-500' : 'text-red-600'}`;
+
+      const starsVal = (csat / 20).toFixed(1);
+      document.getElementById('sideKpiRating').innerHTML = `<span>${starsVal}/5</span> <span class="text-amber-400">★★★★★</span>`;
+
+      // KPI 3 : Retours KYC
+      document.getElementById('sideKpiVolume').textContent = volume.toLocaleString('fr-FR');
+      document.getElementById('sideKpiZoneTag').textContent = state.product === 'ALL' ? zoneLabel : `${state.product} • ${zoneLabel}`;
+
+      // Liste cliquable des sous-divisions
+      const subContainer = document.getElementById('drilldownSubList');
+      const subTitle = document.getElementById('sideSubListTitle');
+
+      if (state.drillLevel === 1) {
+        subTitle.textContent = 'Explorer par Région AFC';
+        subContainer.innerHTML = mockDatabase.regions.map(reg => {
+          const regCountries = mockDatabase.countries.filter(c => c.regionId === reg.id);
+          const regRev = Math.round(regCountries.reduce((a, c) => a + c.revenueK, 0) * share);
+          const regVol = regCountries.reduce((a, c) => a + c.volume, 0);
+          const regCsat = (regCountries.reduce((a, c) => a + c.csat * c.volume, 0) / regVol).toFixed(1);
+          return `
+            <button onclick="drillToRegion('${reg.id}')" class="flex items-center justify-between p-2.5 rounded-xl bg-stone-50 hover:bg-red-50 border border-stone-200/90 text-left transition-all group">
+              <div class="min-w-0 pr-2">
+                <div class="text-xs font-extrabold text-zinc-800 group-hover:text-red-600 truncate">${reg.name}</div>
+                <div class="text-[10px] text-zinc-500 font-mono">CA: ${regRev.toLocaleString('fr-FR')} k€</div>
+              </div>
+              <span class="font-mono text-xs font-extrabold px-2 py-0.5 rounded-md ${regCsat >= 85 ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}">${regCsat}%</span>
+            </button>
+          `;
+        }).join('');
+      } else if (state.drillLevel === 2) {
+        subTitle.textContent = 'Pays de la Région AFC';
+        subContainer.innerHTML = activeCountries.map(c => {
+          const cRev = Math.round(c.revenueK * share);
+          return `
+            <button onclick="drillToCountry('${c.iso}')" class="flex items-center justify-between p-2.5 rounded-xl bg-stone-50 hover:bg-red-50 border border-stone-200/90 text-left transition-all group">
+              <div class="min-w-0 pr-2">
+                <div class="text-xs font-extrabold text-zinc-800 group-hover:text-red-600 truncate">${c.name}</div>
+                <div class="text-[10px] text-zinc-500 font-mono">CA: ${cRev.toLocaleString('fr-FR')} k€ (+${c.growth}%)</div>
+              </div>
+              <span class="font-mono text-xs font-extrabold px-2 py-0.5 rounded-md ${c.csat >= 85 ? 'bg-emerald-50 text-emerald-700' : c.csat >= 70 ? 'bg-amber-50 text-amber-700' : 'bg-red-50 text-red-700'}">${c.csat}%</span>
+            </button>
+          `;
+        }).join('');
+      } else {
+        const country = activeCountries[0];
+        subTitle.textContent = `Restaurants & Hubs — ${country.name.split(' ')[0]}`;
+        subContainer.innerHTML = country.sites.map(s => {
+          const isSelected = state.drillLevel === 4 && state.selectedSiteId === s.id;
+          const sRev = Math.round(s.revenueK * share);
+          return `
+            <button onclick="drillToSite('${country.iso}', '${s.id}')" class="flex items-center justify-between p-2.5 rounded-xl border text-left transition-all ${isSelected ? 'bg-red-50 border-red-400' : 'bg-stone-50 hover:bg-red-50 border-stone-200/90'}">
+              <div class="min-w-0 pr-2">
+                <div class="text-xs font-extrabold text-zinc-800 truncate">${s.name}</div>
+                <div class="text-[10px] text-zinc-500 font-mono">CA: ${sRev.toLocaleString('fr-FR')} k€</div>
+              </div>
+              <span class="font-mono text-xs font-extrabold px-2 py-0.5 rounded-md ${s.csat >= 85 ? 'bg-emerald-50 text-emerald-700' : s.csat >= 70 ? 'bg-amber-50 text-amber-700' : 'bg-red-50 text-red-700'}">${s.csat}%</span>
+            </button>
+          `;
+        }).join('');
+      }
+    }
+
+    /**
+     * 7. NAVIGATION DRILL-DOWN & FIL D'ARIANE (BREADCRUMB)
+     */
+    window.drillToRegion = function(regionId) {
+      state.drillLevel = 2;
+      state.selectedRegionId = regionId;
+      state.selectedCountryIso = null;
+      state.selectedSiteId = null;
+      renderWorldMap();
+    };
+
+    window.drillToCountry = function(countryIso) {
+      const c = mockDatabase.countries.find(item => item.iso === countryIso);
+      if (!c) return;
+      state.drillLevel = 3;
+      state.selectedRegionId = c.regionId;
+      state.selectedCountryIso = c.iso;
+      state.selectedSiteId = null;
+      renderWorldMap();
+    };
+
+    window.drillToSite = function(countryIso, siteId) {
+      const c = mockDatabase.countries.find(item => item.iso === countryIso);
+      if (!c) return;
+      state.drillLevel = 4;
+      state.selectedRegionId = c.regionId;
+      state.selectedCountryIso = c.iso;
+      state.selectedSiteId = siteId;
+      renderWorldMap();
+    };
+
+    window.resetWorldLevel = function() {
+      state.drillLevel = 1;
+      state.selectedRegionId = null;
+      state.selectedCountryIso = null;
+      state.selectedSiteId = null;
+      renderWorldMap();
+    };
+
+    function renderBreadcrumb() {
+      const bc = document.getElementById('mapBreadcrumb');
+      let html = `<button onclick="resetWorldLevel()" class="hover:text-red-600 transition-colors ${state.drillLevel === 1 ? 'font-extrabold text-red-600' : 'text-zinc-500'}">Monde AFC</button>`;
+
+      if (state.drillLevel >= 2 && state.selectedRegionId) {
+        const reg = mockDatabase.regions.find(r => r.id === state.selectedRegionId);
+        html += `<i data-lucide="chevron-right" class="w-3.5 h-3.5 text-zinc-400"></i>
+          <button onclick="drillToRegion('${reg.id}')" class="hover:text-red-600 transition-colors ${state.drillLevel === 2 ? 'font-extrabold text-red-600' : 'text-zinc-500'}">${reg.name}</button>`;
+      }
+
+      if (state.drillLevel >= 3 && state.selectedCountryIso) {
+        const c = mockDatabase.countries.find(item => item.iso === state.selectedCountryIso);
+        html += `<i data-lucide="chevron-right" class="w-3.5 h-3.5 text-zinc-400"></i>
+          <button onclick="drillToCountry('${c.iso}')" class="hover:text-red-600 transition-colors ${state.drillLevel === 3 ? 'font-extrabold text-red-600' : 'text-zinc-500'}">${c.name}</button>`;
+      }
+
+      if (state.drillLevel === 4 && state.selectedSiteId) {
+        const c = mockDatabase.countries.find(item => item.iso === state.selectedCountryIso);
+        const s = c?.sites.find(item => item.id === state.selectedSiteId);
+        html += `<i data-lucide="chevron-right" class="w-3.5 h-3.5 text-zinc-400"></i>
+          <span class="font-extrabold text-red-600">${s?.name}</span>`;
+      }
+
+      bc.innerHTML = html;
+    }
+
+    /**
+     * 8. INFOBULLE DYNAMIQUE DE LA CARTE
+     */
+    function showWorldTooltip(event, title, subtitle, revK, csat, growth, canZoom) {
+      const tt = document.getElementById('worldMapTooltip');
+      document.getElementById('ttTitle').textContent = title;
+      document.getElementById('ttRegionBadge').textContent = subtitle;
+      document.getElementById('ttRevenue').textContent = revK.toLocaleString('fr-FR') + ' k€';
+      const csatEl = document.getElementById('ttCsat');
+      csatEl.textContent = csat.toFixed(1) + '%';
+      csatEl.className = `font-mono font-bold ${csat >= 85 ? 'text-emerald-400' : csat >= 70 ? 'text-amber-400' : 'text-red-400'}`;
+      document.getElementById('ttGrowth').textContent = '+' + growth.toFixed(1) + '%';
+      document.getElementById('ttHint').style.display = canZoom ? 'flex' : 'none';
+      tt.classList.remove('hidden');
+      moveWorldTooltip(event);
+    }
+
+    function moveWorldTooltip(event) {
+      const tt = document.getElementById('worldMapTooltip');
+      let left = event.clientX + 14;
+      let top = event.clientY + 14;
+      if (left + 235 > window.innerWidth) left = event.clientX - 235;
+      if (top + 140 > window.innerHeight) top = event.clientY - 140;
+      tt.style.left = `${left}px`;
+      tt.style.top = `${top}px`;
+    }
+
+    function hideWorldTooltip() {
+      document.getElementById('worldMapTooltip').classList.add('hidden');
+    }
+
+    /**
+     * 9. VUE 2 (CHARTS VENTES AFC) & VUE 3 (EXPLORATEUR VERBATIMS KYC)
+     */
+    function initOverviewCharts() {
+      const ctxTrend = document.getElementById('overviewTrendChart').getContext('2d');
+      if (trendChart) trendChart.destroy();
+      trendChart = new Chart(ctxTrend, {
+        type: 'line',
+        data: {
+          labels: ['Fév', 'Mar', 'Avr', 'Mai', 'Juin', 'Juil (Fusion USC)', 'Août', 'Sept (Campagne KYC)', 'Oct', 'Nov'],
+          datasets: [
+            {
+              label: 'Ventes Mensuelles AFC (k€)',
+              data: [1320, 1380, 1410, 1460, 1520, 1890, 1960, 2140, 2260, 2380],
+              borderColor: '#dc2626',
+              backgroundColor: 'rgba(220, 38, 38, 0.12)',
+              fill: true,
+              tension: 0.35,
+              borderWidth: 3,
+              yAxisID: 'y'
+            },
+            {
+              label: 'Satisfaction KYC (%)',
+              data: [79.5, 80.1, 80.8, 81.4, 82.0, 81.7, 83.2, 84.6, 85.3, 85.8],
+              borderColor: '#f59e0b',
+              tension: 0.35,
+              borderWidth: 2.5,
+              borderDash: [5, 5],
+              yAxisID: 'y1'
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: {
+            x: { grid: { display: false } },
+            y: { type: 'linear', position: 'left', grid: { color: '#f5f5f4' } },
+            y1: { type: 'linear', position: 'right', min: 70, max: 95, grid: { drawOnChartArea: false } }
+          }
+        }
+      });
+
+      const ctxProd = document.getElementById('overviewProductChart').getContext('2d');
+      if (productChart) productChart.destroy();
+      productChart = new Chart(ctxProd, {
+        type: 'doughnut',
+        data: {
+          labels: ['Crispy Tenders', 'Family Buckets', 'Spicy Wings', 'Nuggets Data Box', 'Armoric Burgers'],
+          datasets: [{
+            data: [38.5, 26.0, 16.5, 11.0, 8.0],
+            backgroundColor: ['#dc2626', '#f59e0b', '#991b1b', '#18181b', '#fb923c'],
+            borderWidth: 0
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          cutout: '68%',
+          plugins: { legend: { display: false } }
+        }
+      });
+
+      const ctxReg = document.getElementById('overviewRegionBarChart').getContext('2d');
+      if (regionBarChart) regionBarChart.destroy();
+      regionBarChart = new Chart(ctxReg, {
+        type: 'bar',
+        data: {
+          labels: ['Europe (Berceau AFC)', 'Asie-Pacifique & Inde (USC)', 'Amérique du Nord', 'Moyen-Orient & Afrique', 'Amérique Latine'],
+          datasets: [
+            {
+              label: 'Chiffre d’Affaires (k€)',
+              data: [8890, 6330, 3760, 1710, 1530],
+              backgroundColor: ['#dc2626', '#f59e0b', '#991b1b', '#27272a', '#ef4444'],
+              borderRadius: 8
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: {
+            x: { grid: { display: false } },
+            y: { grid: { color: '#f5f5f4' } }
+          }
+        }
+      });
+    }
+
+    function renderVerbatimsTable() {
+      const search = document.getElementById('verbatimSearchInput').value.toLowerCase().trim();
+      const regFilter = document.getElementById('verbatimRegionFilter').value;
+      const sentFilter = document.getElementById('verbatimSentimentFilter').value;
+
+      const filtered = mockDatabase.feedbacks.filter(fb => {
+        if (regFilter !== 'ALL' && fb.regionId !== regFilter) return false;
+        if (state.product !== 'ALL' && fb.product !== state.product) return false;
+        const sent = fb.rating >= 4 ? 'positif' : fb.rating === 3 ? 'neutre' : 'critique';
+        if (sentFilter !== 'ALL' && sent !== sentFilter) return false;
+        if (search) {
+          const loc = getLocationLabel(fb).toLowerCase();
+          if (!fb.comment.toLowerCase().includes(search) && !fb.author.toLowerCase().includes(search) && !loc.includes(search) && !fb.product.toLowerCase().includes(search)) {
+            return false;
+          }
+        }
+        return true;
+      });
+
+      const tbody = document.getElementById('verbatimsTableBody');
+      tbody.innerHTML = filtered.map(fb => {
+        const sent = getSentimentMeta(fb.rating);
+        return `
+          <tr class="hover:bg-red-50/30 transition-colors">
+            <td class="py-3 px-3">
+              <div class="font-extrabold text-zinc-800">${fb.author}</div>
+              <div class="text-[10px] text-zinc-400">${fb.time}</div>
+            </td>
+            <td class="py-3 px-3 font-semibold text-zinc-700">${getLocationLabel(fb)}</td>
+            <td class="py-3 px-3">
+              <span class="text-amber-500 font-mono font-bold">${renderStars(fb.rating)}</span>
+              <span class="ml-1.5 px-1.5 py-0.5 rounded text-[10px] font-bold border ${sent.badgeClass}">${sent.label}</span>
+            </td>
+            <td class="py-3 px-3">
+              <span class="px-2 py-0.5 rounded-md bg-red-50 border border-red-200 text-red-800 font-bold">${fb.product}</span>
+            </td>
+            <td class="py-3 px-3 text-zinc-600 leading-relaxed">« ${fb.comment} »</td>
+            <td class="py-3 px-3 text-right">
+              <button onclick="locateFeedbackOnMap('${fb.countryIso}', '${fb.siteId}')" class="px-2.5 py-1 rounded-lg bg-red-50 hover:bg-red-600 text-red-700 hover:text-white font-bold transition-all">
+                Zoomer Carte
+              </button>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    window.locateFeedbackOnMap = function(countryIso, siteId) {
+      switchView('map');
+      drillToSite(countryIso, siteId);
+    };
+
+    /**
+     * 10. NAVIGATION ENTRE VUES & INTERACTIONS UI
+     */
+    const viewHeaders = {
+      map: {
+        title: 'Nugget Data & AI Initiative (N.D.A.I) — Carte Globale',
+        subtitle: 'Pilotage mondial des ventes Salesforce & analyse des sentiments clients KYC (incluant USC Corporation Inde)'
+      },
+      overview: {
+        title: 'Ventes Salesforce & Mix Produits AFC',
+        subtitle: 'Suivi consolidé des ventes par pays et par gamme (Crispy Tenders, Buckets, Spicy Wings, Nuggets)'
+      },
+      verbatims: {
+        title: 'Retours Campagne KYC — Analyse Sentiments IA/ML',
+        subtitle: 'Exploration des verbatims collectés via l’API REST KYC sur l’ensemble des restaurants mondiaux'
+      },
+      database: {
+        title: 'Pipeline Data N.D.A.I & Schéma Base de Données',
+        subtitle: 'Architecture cloud-ready reliant les CSV quotidiens de ventes et les webhooks API de campagne KYC'
+      }
+    };
+
+    function switchView(viewName) {
+      state.view = viewName;
+
+      document.querySelectorAll('.nav-btn').forEach(btn => {
+        const active = btn.dataset.view === viewName;
+        if (active) {
+          btn.classList.add('active', 'bg-red-600', 'text-white', 'shadow-md', 'shadow-red-600/30', 'font-semibold');
+          btn.classList.remove('text-stone-400', 'hover:text-white', 'hover:bg-red-950/60');
+        } else {
+          btn.classList.remove('active', 'bg-red-600', 'text-white', 'shadow-md', 'shadow-red-600/30', 'font-semibold');
+          btn.classList.add('text-stone-400', 'hover:text-white', 'hover:bg-red-950/60');
+        }
+      });
+
+      document.querySelectorAll('.view-section').forEach(sec => sec.classList.add('hidden'));
+      document.getElementById(`view-${viewName}`).classList.remove('hidden');
+
+      document.getElementById('pageTitle').textContent = viewHeaders[viewName].title;
+      document.getElementById('pageSubtitle').textContent = viewHeaders[viewName].subtitle;
+
+      if (viewName === 'overview') initOverviewCharts();
+      if (viewName === 'verbatims') renderVerbatimsTable();
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+      lucide.createIcons();
+
+      // Sidebar rétractable
+      const sidebar = document.getElementById('sidebar');
+      const toggleIcon = document.getElementById('sidebarToggleIcon');
+      document.getElementById('toggleSidebarBtn').addEventListener('click', () => {
+        state.sidebarCollapsed = !state.sidebarCollapsed;
+        const labels = document.querySelectorAll('.sidebar-label');
+        if (state.sidebarCollapsed) {
+          sidebar.classList.replace('w-64', 'w-20');
+          labels.forEach(l => l.classList.add('hidden'));
+          toggleIcon.setAttribute('data-lucide', 'panel-left-open');
+        } else {
+          sidebar.classList.replace('w-20', 'w-64');
+          labels.forEach(l => l.classList.remove('hidden'));
+          toggleIcon.setAttribute('data-lucide', 'panel-left-close');
+        }
+        lucide.createIcons();
+      });
+
+      // Onglets Sidebar
+      document.querySelectorAll('.nav-btn').forEach(btn => {
+        btn.addEventListener('click', () => switchView(btn.dataset.view));
+      });
+
+      // Bouton Retour Drill-Down
+      document.getElementById('mapBackBtn').addEventListener('click', () => {
+        if (state.drillLevel === 4) {
+          state.drillLevel = 3;
+          state.selectedSiteId = null;
+        } else if (state.drillLevel === 3) {
+          state.drillLevel = 2;
+          state.selectedCountryIso = null;
+        } else if (state.drillLevel === 2) {
+          state.drillLevel = 1;
+          state.selectedRegionId = null;
+        }
+        renderWorldMap();
+      });
+
+      // Sélecteur métrique carte
+      document.getElementById('mapMetricSelect').addEventListener('change', (e) => {
+        state.metric = e.target.value;
+        const legendTitle = document.getElementById('legendTitle');
+        if (state.metric === 'csat') legendTitle.textContent = 'Score Satisfaction KYC';
+        if (state.metric === 'revenue') legendTitle.textContent = 'Volume Ventes (k€)';
+        if (state.metric === 'growth') legendTitle.textContent = 'Croissance Annuelle (%)';
+        renderWorldMap();
+      });
+
+      // Filtre Produit Global AFC
+      document.getElementById('globalProductFilter').addEventListener('change', (e) => {
+        state.product = e.target.value;
+        renderWorldMap();
+        if (state.view === 'verbatims') renderVerbatimsTable();
+        showToast(`Filtre produit AFC : ${e.target.options[e.target.selectedIndex].text}`);
+      });
+
+      // Bascule Mode Fond KYC vs Focus Verbatims
+      const modeImmersiveBtn = document.getElementById('modeImmersiveBtn');
+      const modeFocusBtn = document.getElementById('modeFocusBtn');
+      const worldMapContainer = document.getElementById('worldMapContainer');
+      const focusOverlay = document.getElementById('focusVerbatimsOverlay');
+
+      modeImmersiveBtn.addEventListener('click', () => {
+        state.commentDisplayMode = 'immersive';
+        modeImmersiveBtn.classList.add('bg-white', 'text-red-600', 'shadow-sm', 'font-bold');
+        modeFocusBtn.classList.remove('bg-white', 'text-red-600', 'shadow-sm', 'font-bold');
+        worldMapContainer.classList.remove('hidden');
+        focusOverlay.classList.add('hidden');
+      });
+
+      modeFocusBtn.addEventListener('click', () => {
+        state.commentDisplayMode = 'focus';
+        modeFocusBtn.classList.add('bg-white', 'text-red-600', 'shadow-sm', 'font-bold');
+        modeImmersiveBtn.classList.remove('bg-white', 'text-red-600', 'shadow-sm', 'font-bold');
+        worldMapContainer.classList.add('hidden');
+        focusOverlay.classList.remove('hidden');
+      });
+
+      // Filtre période
+      document.querySelectorAll('.period-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          document.querySelectorAll('.period-btn').forEach(b => {
+            b.classList.remove('active', 'bg-white', 'shadow-sm', 'text-red-600', 'font-bold');
+            b.classList.add('text-zinc-600');
+          });
+          btn.classList.add('active', 'bg-white', 'shadow-sm', 'text-red-600', 'font-bold');
+          state.period = btn.dataset.period;
+          renderZoneComments();
+          showToast(`Période sélectionnée : ${btn.textContent}`);
+        });
+      });
+
+      // Filtres table verbatims
+      document.getElementById('verbatimSearchInput').addEventListener('input', renderVerbatimsTable);
+      document.getElementById('verbatimRegionFilter').addEventListener('change', renderVerbatimsTable);
+      document.getElementById('verbatimSentimentFilter').addEventListener('change', renderVerbatimsTable);
+
+      // Export JSON
+      document.getElementById('exportJsonBtn').addEventListener('click', () => {
+        const dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(mockDatabase, null, 2));
+        const a = document.createElement('a');
+        a.href = dataStr;
+        a.download = 'afc_ndai_global_sales_kyc.json';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        showToast('Export JSON AFC N.D.A.I téléchargé');
+      });
+
+      // Simulation Webhook API KYC
+      document.getElementById('simulateApiBtn').addEventListener('click', () => {
+        document.getElementById('apiStatusLabel').textContent = 'Webhook KYC testé : Payload 201 Created';
+        document.getElementById('apiStatusLabel').className = 'text-xs text-emerald-600 font-bold';
+        showToast('Webhook REST API KYC validé (AFC + USC India)');
+      });
+
+      // Chargement initial
+      loadWorldData();
+    });
+  </script>
+</body>
+</html>
