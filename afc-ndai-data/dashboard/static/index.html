@@ -1,0 +1,563 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AFC N.D.A.I — Global Sales & KYC Customer Sentiment</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+  <script src="https://cdn.jsdelivr.net/npm/topojson-client@3"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace'],
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: rgba(220, 38, 38, 0.28); border-radius: 9999px; }
+    .country-shape { transition: fill 0.25s ease, filter 0.2s ease; cursor: pointer; }
+    .country-shape:hover { filter: brightness(1.08); stroke: #18181b; stroke-width: 1.5px; }
+    .country-inactive { fill: #e4e4e7; stroke: #d4d4d8; stroke-width: 0.5px; cursor: default; }
+    @keyframes floatSlow { 0%, 100% { transform: translateY(0px); } 50% { transform: translateY(-5px); } }
+    .bg-comment-card { animation: floatSlow 7s ease-in-out infinite; }
+    .bg-comment-card:nth-child(even) { animation-delay: -3.5s; }
+  </style>
+</head>
+<body class="bg-stone-50 text-zinc-900 font-sans antialiased overflow-hidden">
+
+  <div class="flex h-screen w-full overflow-hidden">
+    <!-- SIDEBAR AFC -->
+    <aside id="sidebar" class="z-40 flex flex-col justify-between bg-[#160a0b] text-stone-200 border-r border-red-950/80 transition-all duration-300 w-64 shrink-0 select-none">
+      <div>
+        <div class="h-16 flex items-center justify-between px-4 border-b border-red-950/70">
+          <div class="flex items-center gap-3 overflow-hidden">
+            <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-red-600 to-red-800 border border-amber-400/50 flex items-center justify-center shadow-lg shrink-0">
+              <span class="font-black text-white text-sm">AFC</span>
+            </div>
+            <div class="sidebar-label whitespace-nowrap">
+              <div class="flex items-center gap-1.5">
+                <span class="font-black text-base text-white leading-none">AFC</span>
+                <span class="text-[9px] font-bold px-1.5 py-0.5 rounded bg-red-600 text-white">N.D.A.I</span>
+              </div>
+              <span class="text-[11px] text-amber-400/90 font-medium block mt-0.5">Armoric Fried Chicken</span>
+            </div>
+          </div>
+          <button id="toggleSidebarBtn" class="p-1.5 rounded-lg text-stone-400 hover:text-white hover:bg-red-950/70">
+            <i data-lucide="panel-left-close" class="w-5 h-5"></i>
+          </button>
+        </div>
+
+        <nav class="p-3 space-y-1.5 mt-2">
+          <button data-view="map" class="nav-btn active w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold bg-red-600 text-white shadow-md">
+            <i data-lucide="globe" class="w-5 h-5 shrink-0"></i>
+            <span class="sidebar-label truncate">Carte Mondiale</span>
+          </button>
+          <button data-view="overview" class="nav-btn w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-stone-400 hover:text-white hover:bg-red-950/60">
+            <i data-lucide="trending-up" class="w-5 h-5 shrink-0"></i>
+            <span class="sidebar-label truncate">Ventes & Produits</span>
+          </button>
+          <button data-view="verbatims" class="nav-btn w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-stone-400 hover:text-white hover:bg-red-950/60">
+            <i data-lucide="message-square-heart" class="w-5 h-5 shrink-0"></i>
+            <span class="sidebar-label truncate">Retours Campagne KYC</span>
+            <span id="sidebarFeedbackCount" class="sidebar-label ml-auto text-[10px] px-1.5 py-0.5 rounded bg-red-950 text-amber-300 font-mono font-bold">0</span>
+          </button>
+        </nav>
+      </div>
+
+      <div class="p-3 border-t border-red-950/70">
+        <div class="p-2.5 rounded-xl bg-red-950/50 border border-red-800/40 flex items-center gap-2.5">
+          <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse shrink-0"></span>
+          <div class="sidebar-label text-xs leading-tight truncate">
+            <div class="font-bold text-white">PostgreSQL Live</div>
+            <div class="text-[11px] text-amber-300/80">afc_ndai • XLM-RoBERTa</div>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- CONTENU PRINCIPAL -->
+    <div class="flex-1 flex flex-col min-w-0 overflow-hidden bg-stone-50">
+      <header class="h-16 bg-white border-b border-stone-200 px-6 flex items-center justify-between shrink-0 z-30">
+        <div class="flex items-center gap-3 min-w-0">
+          <div class="w-1.5 h-8 rounded-full bg-gradient-to-b from-red-600 to-amber-500"></div>
+          <div class="min-w-0">
+            <h1 id="pageTitle" class="text-base sm:text-lg font-extrabold text-zinc-900 truncate">Nugget Data & AI Initiative (N.D.A.I) — Carte Globale</h1>
+            <p class="text-xs text-zinc-500 hidden sm:block truncate">Données temps réel PostgreSQL (CSV Ventes + API KYC & Sentiment IA)</p>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-2.5 shrink-0">
+          <select id="globalProductFilter" class="bg-red-50/70 border border-red-200 text-xs font-bold text-red-900 rounded-xl px-3 py-1.5">
+            <option value="ALL">Tous Produits AFC</option>
+          </select>
+
+          <select id="globalCampaignFilter" class="bg-stone-100 border border-stone-200 text-xs font-bold text-zinc-800 rounded-xl px-3 py-1.5">
+            <option value="ALL">Toutes Campagnes</option>
+          </select>
+
+          <button id="refreshBtn" class="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-red-600 hover:bg-red-700 text-white shadow-sm">
+            <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
+            <span>Actualiser</span>
+          </button>
+        </div>
+      </header>
+
+      <main class="flex-1 overflow-y-auto p-4 md:p-6 space-y-5">
+        <!-- VUE 1 : CARTE MONDIALE + FOND DE COMMENTAIRES -->
+        <section id="view-map" class="view-section space-y-4">
+          <div class="bg-white border border-stone-200 rounded-2xl p-3.5 flex flex-wrap items-center justify-between gap-3 shadow-sm">
+            <div class="flex items-center gap-2">
+              <button id="resetCountryBtn" class="px-3 py-1.5 rounded-xl text-xs font-bold bg-red-50 text-red-700 hover:bg-red-100">
+                Monde entier
+              </button>
+              <span id="selectedCountryBadge" class="text-xs font-extrabold text-red-600">Vue globale (tous pays)</span>
+            </div>
+            <div class="flex items-center gap-2 text-xs text-zinc-500">
+              <span>Cliquer sur un pays coloré de la carte pour filtrer les ventes</span>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 lg:grid-cols-12 gap-5">
+            <!-- CARTE D3 + ARRIÈRE-PLAN COMMENTAIRES KYC -->
+            <div class="lg:col-span-7 bg-white border border-stone-200 rounded-2xl p-5 flex flex-col justify-between relative overflow-hidden shadow-sm min-h-[560px]">
+              <div id="ambientCommentsBackdrop" class="absolute inset-0 z-0 pointer-events-none overflow-hidden p-4 grid grid-cols-2 sm:grid-cols-3 gap-3 content-between opacity-35"></div>
+              <div class="absolute inset-0 z-0 pointer-events-none bg-gradient-to-b from-white/80 via-stone-50/45 to-white/85"></div>
+
+              <div class="relative z-10 flex items-start justify-between gap-3">
+                <div class="bg-white/95 backdrop-blur-md border border-red-200/80 rounded-xl px-3.5 py-2 shadow-sm">
+                  <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-600 text-white">Réseau AFC & Expansion</span>
+                  <h2 id="mapZoneTitle" class="text-base font-extrabold text-zinc-900 mt-0.5">Ventes Mondiales & Sentiment KYC</h2>
+                </div>
+                <div class="bg-white/95 border border-stone-200 rounded-xl p-2.5 text-[11px] shadow-sm">
+                  <div class="font-bold text-zinc-700 mb-1">Volume de ventes</div>
+                  <div class="flex items-center gap-2">
+                    <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-sm bg-red-600 inline-block"></span>Élevé</span>
+                    <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-sm bg-amber-400 inline-block"></span>Moyen</span>
+                    <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-sm bg-emerald-500 inline-block"></span>Actif</span>
+                  </div>
+                </div>
+              </div>
+
+              <div id="worldMapContainer" class="relative z-10 flex-1 flex items-center justify-center my-2 min-h-[360px]"></div>
+
+              <div id="countryQuickPills" class="relative z-10 bg-white/95 border border-stone-200 rounded-xl px-3 py-2 flex flex-wrap items-center gap-1.5 text-[11px]"></div>
+            </div>
+
+            <!-- COLONNE DROITE : KPIs + PAYS + DERNIERS COMMENTAIRES KYC -->
+            <div class="lg:col-span-5 flex flex-col gap-4">
+              <div class="grid grid-cols-3 gap-3">
+                <div class="bg-white border border-stone-200 rounded-2xl p-3.5 shadow-sm border-t-4 border-t-red-600">
+                  <div class="text-[11px] font-semibold text-zinc-500">CA Ventes (CSV)</div>
+                  <div id="kpiRevenue" class="text-lg font-black font-mono mt-1 text-zinc-900">0 €</div>
+                  <div id="kpiUnits" class="text-[11px] font-bold text-emerald-600 mt-0.5">0 unités</div>
+                </div>
+                <div class="bg-white border border-stone-200 rounded-2xl p-3.5 shadow-sm border-t-4 border-t-amber-400">
+                  <div class="text-[11px] font-semibold text-zinc-500">Positif KYC (IA)</div>
+                  <div id="kpiPositiveRate" class="text-lg font-black font-mono mt-1 text-emerald-600">0%</div>
+                  <div id="kpiAvgScore" class="text-[11px] font-bold text-amber-600 mt-0.5">Score IA: 0.00</div>
+                </div>
+                <div class="bg-white border border-stone-200 rounded-2xl p-3.5 shadow-sm border-t-4 border-t-zinc-800">
+                  <div class="text-[11px] font-semibold text-zinc-500">Retours KYC</div>
+                  <div id="kpiFeedbackCount" class="text-lg font-black font-mono mt-1 text-zinc-900">0</div>
+                  <div id="kpiSentimentSplit" class="text-[11px] font-medium text-zinc-500 truncate mt-0.5">0+ / 0-</div>
+                </div>
+              </div>
+
+              <div class="bg-white border border-stone-200 rounded-2xl p-4 shadow-sm">
+                <h3 class="text-xs font-extrabold uppercase tracking-wider text-zinc-600 mb-2.5">Ventes par Pays (Base PostgreSQL)</h3>
+                <div id="countryList" class="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-[150px] overflow-y-auto pr-1"></div>
+              </div>
+
+              <div class="bg-white border border-stone-200 rounded-2xl p-4 shadow-sm flex-1 flex flex-col min-h-[280px]">
+                <div class="flex items-center justify-between mb-3 pb-2 border-b border-stone-100">
+                  <div class="flex items-center gap-2">
+                    <span class="w-2.5 h-2.5 rounded-full bg-red-600 animate-ping"></span>
+                    <h3 class="text-xs font-extrabold uppercase tracking-wider text-zinc-800">Derniers Retours KYC (IA Multilingue)</h3>
+                  </div>
+                  <button onclick="switchView('verbatims')" class="text-[11px] font-bold text-red-600 hover:underline">Voir tout</button>
+                </div>
+                <div id="sideLiveCommentsList" class="space-y-2.5 overflow-y-auto max-h-[260px] pr-1"></div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- VUE 2 : VENTES & PRODUITS -->
+        <section id="view-overview" class="view-section hidden space-y-6">
+          <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            <div class="lg:col-span-8 bg-white border border-stone-200 rounded-2xl p-5 shadow-sm">
+              <h3 class="text-base font-extrabold text-zinc-900 mb-1">Évolution des Ventes (CSV)</h3>
+              <p class="text-xs text-zinc-500 mb-4">Chiffre d'affaires par date de vente</p>
+              <div class="h-72"><canvas id="salesTrendChart"></canvas></div>
+            </div>
+            <div class="lg:col-span-4 bg-white border border-stone-200 rounded-2xl p-5 shadow-sm">
+              <h3 class="text-base font-extrabold text-zinc-900 mb-1">Répartition par Produit</h3>
+              <p class="text-xs text-zinc-500 mb-4">Part du chiffre d'affaires</p>
+              <div class="h-64"><canvas id="productDoughnutChart"></canvas></div>
+            </div>
+          </div>
+          <div class="bg-white border border-stone-200 rounded-2xl p-5 shadow-sm">
+            <h3 class="text-base font-extrabold text-zinc-900 mb-4">Chiffre d'Affaires par Pays</h3>
+            <div class="h-64"><canvas id="countryBarChart"></canvas></div>
+          </div>
+        </section>
+
+        <!-- VUE 3 : VERBATIMS KYC -->
+        <section id="view-verbatims" class="view-section hidden space-y-5">
+          <div class="bg-white border border-stone-200 rounded-2xl p-5 shadow-sm space-y-4">
+            <div class="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h3 class="text-base font-extrabold text-zinc-900">Tous les Retours Campagne KYC</h3>
+                <p class="text-xs text-zinc-500">Classés par modèle multilingue XLM-RoBERTa</p>
+              </div>
+              <div class="flex flex-wrap items-center gap-2.5">
+                <input id="verbatimSearchInput" type="text" placeholder="Rechercher commentaire, client, campagne..." class="px-3 py-2 rounded-xl text-xs bg-stone-50 border border-stone-200 w-64" />
+                <select id="verbatimSentimentFilter" class="bg-stone-50 border border-stone-200 text-xs font-semibold rounded-xl px-3 py-2">
+                  <option value="ALL">Tous sentiments</option>
+                  <option value="positive">Positive</option>
+                  <option value="neutral">Neutral</option>
+                  <option value="negative">Negative</option>
+                </select>
+              </div>
+            </div>
+            <div class="overflow-x-auto">
+              <table class="w-full text-left border-collapse">
+                <thead>
+                  <tr class="border-b border-stone-200 text-[11px] font-bold uppercase text-zinc-400">
+                    <th class="py-3 px-3">Client & Date</th>
+                    <th class="py-3 px-3">Campagne / Produits</th>
+                    <th class="py-3 px-3">Sentiment IA</th>
+                    <th class="py-3 px-3">Score</th>
+                    <th class="py-3 px-3 w-1/2">Commentaire</th>
+                  </tr>
+                </thead>
+                <tbody id="verbatimsTableBody" class="divide-y divide-stone-100 text-xs"></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <div id="worldMapTooltip" class="pointer-events-none fixed z-50 hidden bg-[#160a0b]/95 text-white border border-red-800 rounded-xl p-3 shadow-2xl text-xs min-w-[200px]">
+    <div id="ttTitle" class="font-extrabold text-sm text-white border-b border-red-900/70 pb-1 mb-1">Pays</div>
+    <div class="flex justify-between"><span class="text-stone-400">CA :</span><span id="ttRevenue" class="font-mono font-bold text-amber-400">0 €</span></div>
+    <div class="flex justify-between"><span class="text-stone-400">Unités :</span><span id="ttUnits" class="font-mono font-bold text-emerald-400">0</span></div>
+  </div>
+
+  <script>
+    // Mapping noms pays (FR/EN/Codes) -> ISO numérique TopoJSON world-atlas
+    const COUNTRY_TO_ISO = {
+      'france': '250', 'fr': '250',
+      'india': '356', 'inde': '356', 'in': '356',
+      'united states': '840', 'usa': '840', 'us': '840', 'etats-unis': '840', 'états-unis': '840',
+      'united kingdom': '826', 'uk': '826', 'royaume-uni': '826',
+      'germany': '276', 'allemagne': '276', 'de': '276',
+      'spain': '724', 'espagne': '724', 'es': '724',
+      'japan': '392', 'japon': '392', 'jp': '392',
+      'canada': '124', 'ca': '124',
+      'brazil': '076', 'bresil': '076', 'brésil': '076', 'br': '076',
+      'mexico': '484', 'mexique': '484', 'mx': '484',
+      'australia': '036', 'australie': '036', 'au': '036',
+      'singapore': '702', 'singapour': '702', 'sg': '702',
+      'south africa': '710', 'afrique du sud': '710', 'za': '710',
+      'morocco': '504', 'maroc': '504', 'ma': '504',
+      'uae': '784', 'united arab emirates': '784', 'ae': '784',
+      'italy': '380', 'italie': '380', 'it': '380',
+      'china': '156', 'chine': '156', 'cn': '156'
+    };
+
+    function resolveIso(countryName) {
+      if (!countryName) return null;
+      return COUNTRY_TO_ISO[countryName.trim().toLowerCase()] || null;
+    }
+
+    const state = {
+      selectedCountry: 'ALL',
+      selectedProduct: 'ALL',
+      selectedCampaign: 'ALL',
+      selectedSentiment: 'ALL',
+      searchQuery: '',
+      worldTopo: null,
+      data: null
+    };
+
+    let trendChart = null, prodChart = null, barChart = null;
+
+    function sentimentBadge(label) {
+      if (label === 'positive') return { text: 'Positif', cls: 'bg-emerald-50 text-emerald-700 border-emerald-200' };
+      if (label === 'negative') return { text: 'Négatif', cls: 'bg-red-50 text-red-700 border-red-200' };
+      return { text: 'Neutre', cls: 'bg-amber-50 text-amber-800 border-amber-300' };
+    }
+
+    async function fetchDashboard() {
+      const params = new URLSearchParams();
+      if (state.selectedCountry !== 'ALL') params.set('country', state.selectedCountry);
+      if (state.selectedProduct !== 'ALL') params.set('product', state.selectedProduct);
+      if (state.selectedCampaign !== 'ALL') params.set('campaign_id', state.selectedCampaign);
+      if (state.selectedSentiment !== 'ALL') params.set('sentiment', state.selectedSentiment);
+      if (state.searchQuery) params.set('q', state.searchQuery);
+
+      const res = await fetch(`/api/dashboard?${params.toString()}`);
+      state.data = await res.json();
+      populateFilterSelects();
+      renderAll();
+    }
+
+    function populateFilterSelects() {
+      const prodSel = document.getElementById('globalProductFilter');
+      const curProd = state.selectedProduct;
+      prodSel.innerHTML = `<option value="ALL">Tous Produits AFC (${state.data.filters.products.length})</option>` +
+        state.data.filters.products.map(p => `<option value="${p}" ${p === curProd ? 'selected' : ''}>${p}</option>`).join('');
+
+      const campSel = document.getElementById('globalCampaignFilter');
+      const curCamp = state.selectedCampaign;
+      campSel.innerHTML = `<option value="ALL">Toutes Campagnes (${state.data.filters.campaigns.length})</option>` +
+        state.data.filters.campaigns.map(c => `<option value="${c}" ${c === curCamp ? 'selected' : ''}>${c}</option>`).join('');
+    }
+
+    function renderAll() {
+      const { sales_kpi, feedback_kpi, by_country, feedbacks } = state.data;
+
+      // KPIs
+      document.getElementById('kpiRevenue').textContent = sales_kpi.total_revenue.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';
+      document.getElementById('kpiUnits').textContent = `${sales_kpi.total_units.toLocaleString('fr-FR')} unités (${sales_kpi.total_orders} ventes)`;
+
+      const posRate = feedback_kpi.total_feedbacks > 0
+        ? ((feedback_kpi.positive_cnt / feedback_kpi.total_feedbacks) * 100).toFixed(1)
+        : '0.0';
+      document.getElementById('kpiPositiveRate').textContent = `${posRate}%`;
+      document.getElementById('kpiAvgScore').textContent = `Confiance IA: ${(feedback_kpi.avg_score * 100).toFixed(1)}%`;
+
+      document.getElementById('kpiFeedbackCount').textContent = feedback_kpi.total_feedbacks;
+      document.getElementById('sidebarFeedbackCount').textContent = feedback_kpi.total_feedbacks;
+      document.getElementById('kpiSentimentSplit').textContent = `${feedback_kpi.positive_cnt}+ / ${feedback_kpi.neutral_cnt}= / ${feedback_kpi.negative_cnt}-`;
+
+      document.getElementById('selectedCountryBadge').textContent =
+        state.selectedCountry === 'ALL' ? 'Vue globale (tous pays)' : `Filtre pays : ${state.selectedCountry}`;
+
+      // Liste Pays
+      const countryList = document.getElementById('countryList');
+      countryList.innerHTML = by_country.map(c => `
+        <button onclick="selectCountry('${c.country.replace(/'/g, "\\'")}')" class="flex items-center justify-between p-2.5 rounded-xl border text-left transition-all ${state.selectedCountry === c.country ? 'bg-red-50 border-red-400' : 'bg-stone-50 hover:bg-red-50 border-stone-200'}">
+          <div class="min-w-0 pr-2">
+            <div class="text-xs font-extrabold text-zinc-800 truncate">${c.country}</div>
+            <div class="text-[10px] text-zinc-500 font-mono">${c.units} unités</div>
+          </div>
+          <span class="font-mono text-xs font-extrabold text-red-700">${c.revenue.toLocaleString('fr-FR')} €</span>
+        </button>
+      `).join('') || `<div class="text-xs text-zinc-400 col-span-2">Aucune vente trouvée.</div>`;
+
+      // Pills rapides bas de carte
+      document.getElementById('countryQuickPills').innerHTML =
+        `<span class="text-zinc-400 font-semibold mr-1">Pays actifs :</span>` +
+        by_country.map(c => `
+          <button onclick="selectCountry('${c.country.replace(/'/g, "\\'")}')" class="px-2 py-0.5 rounded-md font-bold ${state.selectedCountry === c.country ? 'bg-red-600 text-white' : 'bg-stone-100 hover:bg-red-600 hover:text-white text-zinc-700'}">${c.country}</button>
+        `).join('');
+
+      // Fond immersif (6 derniers commentaires) + Volet droit (8 derniers)
+      const latest8 = feedbacks.slice(0, 8);
+      document.getElementById('ambientCommentsBackdrop').innerHTML = latest8.slice(0, 6).map(fb => {
+        const b = sentimentBadge(fb.sentiment_label);
+        return `
+          <div class="bg-comment-card bg-red-50/70 border border-red-200/80 rounded-xl p-2.5 shadow-sm flex flex-col justify-between text-[11px]">
+            <div class="flex items-center justify-between gap-1 mb-1">
+              <span class="font-extrabold text-zinc-800 truncate">${fb.username}</span>
+              <span class="px-1.5 py-0.2 rounded border ${b.cls} font-bold text-[9px]">${b.text}</span>
+            </div>
+            <p class="text-zinc-700 line-clamp-2 italic">« ${fb.comment} »</p>
+            <div class="mt-1 pt-1 border-t border-red-200/50 text-[9px] font-bold text-red-800 truncate">${fb.campaign_id} • ${fb.feedback_date}</div>
+          </div>
+        `;
+      }).join('');
+
+      document.getElementById('sideLiveCommentsList').innerHTML = latest8.map(fb => {
+        const b = sentimentBadge(fb.sentiment_label);
+        return `
+          <div class="p-3 rounded-xl bg-stone-50 border border-stone-200">
+            <div class="flex items-center justify-between gap-2">
+              <div>
+                <div class="text-xs font-extrabold text-zinc-800">${fb.username}</div>
+                <div class="text-[10px] text-zinc-500">${fb.campaign_id} • ${fb.feedback_date}</div>
+              </div>
+              <span class="px-2 py-0.5 rounded-full text-[10px] font-bold border ${b.cls}">${b.text} (${(fb.sentiment_score * 100).toFixed(0)}%)</span>
+            </div>
+            <p class="text-xs text-zinc-700 mt-1.5">« ${fb.comment} »</p>
+          </div>
+        `;
+      }).join('') || `<div class="text-xs text-zinc-400 text-center py-6">Aucun feedback KYC.</div>`;
+
+      // Tableau complet Vue 3
+      document.getElementById('verbatimsTableBody').innerHTML = feedbacks.map(fb => {
+        const b = sentimentBadge(fb.sentiment_label);
+        return `
+          <tr class="hover:bg-red-50/30">
+            <td class="py-3 px-3"><div class="font-bold text-zinc-800">${fb.username}</div><div class="text-[10px] text-zinc-400">${fb.feedback_date}</div></td>
+            <td class="py-3 px-3"><span class="px-2 py-0.5 rounded bg-red-50 border border-red-200 text-red-800 font-bold">${fb.campaign_id}</span><div class="text-[10px] text-zinc-500 mt-0.5">${fb.products_linked}</div></td>
+            <td class="py-3 px-3"><span class="px-2 py-0.5 rounded-full text-[10px] font-bold border ${b.cls}">${b.text}</span></td>
+            <td class="py-3 px-3 font-mono font-bold">${(fb.sentiment_score * 100).toFixed(1)}%</td>
+            <td class="py-3 px-3 text-zinc-700">« ${fb.comment} »</td>
+          </tr>
+        `;
+      }).join('');
+
+      renderMap();
+      renderCharts();
+      lucide.createIcons();
+    }
+
+    function renderMap() {
+      const container = document.getElementById('worldMapContainer');
+      if (!state.worldTopo || !state.data) return;
+      container.innerHTML = '';
+
+      const width = 760, height = 390;
+      const svg = d3.select(container).append('svg').attr('viewBox', `0 0 ${width} ${height}`).attr('class', 'w-full h-full max-h-[380px]');
+      const geo = topojson.feature(state.worldTopo, state.worldTopo.objects.countries);
+      geo.features = geo.features.filter(d => d.id !== '010');
+
+      const projection = d3.geoNaturalEarth1().scale(142).translate([width / 2, height / 1.88]);
+      const pathGen = d3.geoPath().projection(projection);
+
+      const isoMap = new Map();
+      let maxRev = 1;
+      state.data.by_country.forEach(c => {
+        const iso = resolveIso(c.country);
+        if (iso) {
+          isoMap.set(iso, c);
+          if (c.revenue > maxRev) maxRev = c.revenue;
+        }
+      });
+
+      const tt = document.getElementById('worldMapTooltip');
+
+      svg.append('g').selectAll('path').data(geo.features).join('path')
+        .attr('d', pathGen)
+        .attr('class', d => isoMap.has(String(d.id).padStart(3, '0')) ? 'country-shape' : 'country-inactive')
+        .attr('fill', d => {
+          const item = isoMap.get(String(d.id).padStart(3, '0'));
+          if (!item) return '#e4e4e7';
+          const ratio = item.revenue / maxRev;
+          if (ratio >= 0.66) return '#dc2626';
+          if (ratio >= 0.33) return '#f59e0b';
+          return '#10b981';
+        })
+        .attr('stroke', '#ffffff').attr('stroke-width', 0.75)
+        .on('mouseenter', (event, d) => {
+          const item = isoMap.get(String(d.id).padStart(3, '0'));
+          if (!item) return;
+          document.getElementById('ttTitle').textContent = item.country;
+          document.getElementById('ttRevenue').textContent = item.revenue.toLocaleString('fr-FR') + ' €';
+          document.getElementById('ttUnits').textContent = item.units;
+          tt.classList.remove('hidden');
+        })
+        .on('mousemove', (event) => {
+          tt.style.left = `${event.clientX + 14}px`;
+          tt.style.top = `${event.clientY + 14}px`;
+        })
+        .on('mouseleave', () => tt.classList.add('hidden'))
+        .on('click', (_, d) => {
+          const item = isoMap.get(String(d.id).padStart(3, '0'));
+          if (item) selectCountry(item.country);
+        });
+    }
+
+    function renderCharts() {
+      const { sales_trend, by_product, by_country } = state.data;
+
+      if (trendChart) trendChart.destroy();
+      trendChart = new Chart(document.getElementById('salesTrendChart'), {
+        type: 'line',
+        data: {
+          labels: sales_trend.map(r => r.date),
+          datasets: [{
+            label: 'CA Ventes (€)',
+            data: sales_trend.map(r => r.revenue),
+            borderColor: '#dc2626',
+            backgroundColor: 'rgba(220, 38, 38, 0.12)',
+            fill: true,
+            tension: 0.3
+          }]
+        },
+        options: { responsive: true, maintainAspectRatio: false }
+      });
+
+      if (prodChart) prodChart.destroy();
+      prodChart = new Chart(document.getElementById('productDoughnutChart'), {
+        type: 'doughnut',
+        data: {
+          labels: by_product.map(r => r.product),
+          datasets: [{
+            data: by_product.map(r => r.revenue),
+            backgroundColor: ['#dc2626', '#f59e0b', '#991b1b', '#18181b', '#10b981', '#fb923c']
+          }]
+        },
+        options: { responsive: true, maintainAspectRatio: false, cutout: '62%' }
+      });
+
+      if (barChart) barChart.destroy();
+      barChart = new Chart(document.getElementById('countryBarChart'), {
+        type: 'bar',
+        data: {
+          labels: by_country.map(r => r.country),
+          datasets: [{
+            label: 'CA (€)',
+            data: by_country.map(r => r.revenue),
+            backgroundColor: '#dc2626',
+            borderRadius: 8
+          }]
+        },
+        options: { responsive: true, maintainAspectRatio: false }
+      });
+    }
+
+    window.selectCountry = function(country) {
+      state.selectedCountry = (state.selectedCountry === country) ? 'ALL' : country;
+      fetchDashboard();
+    };
+
+    window.switchView = function(viewName) {
+      document.querySelectorAll('.nav-btn').forEach(btn => {
+        const active = btn.dataset.view === viewName;
+        btn.classList.toggle('bg-red-600', active);
+        btn.classList.toggle('text-white', active);
+        btn.classList.toggle('text-stone-400', !active);
+      });
+      document.querySelectorAll('.view-section').forEach(s => s.classList.add('hidden'));
+      document.getElementById(`view-${viewName}`).classList.remove('hidden');
+      if (viewName === 'overview' && state.data) renderCharts();
+    };
+
+    document.addEventListener('DOMContentLoaded', async () => {
+      document.querySelectorAll('.nav-btn').forEach(btn => btn.addEventListener('click', () => switchView(btn.dataset.view)));
+      document.getElementById('resetCountryBtn').addEventListener('click', () => { state.selectedCountry = 'ALL'; fetchDashboard(); });
+      document.getElementById('globalProductFilter').addEventListener('change', e => { state.selectedProduct = e.target.value; fetchDashboard(); });
+      document.getElementById('globalCampaignFilter').addEventListener('change', e => { state.selectedCampaign = e.target.value; fetchDashboard(); });
+      document.getElementById('verbatimSentimentFilter').addEventListener('change', e => { state.selectedSentiment = e.target.value; fetchDashboard(); });
+      document.getElementById('verbatimSearchInput').addEventListener('input', e => { state.searchQuery = e.target.value; fetchDashboard(); });
+      document.getElementById('refreshBtn').addEventListener('click', fetchDashboard);
+
+      try {
+        const res = await fetch('https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json');
+        state.worldTopo = await res.json();
+      } catch (e) { console.warn('TopoJSON indisponible', e); }
+
+      await fetchDashboard();
+    });
+  </script>
+</body>
+</html>
